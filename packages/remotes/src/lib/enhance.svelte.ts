@@ -1,5 +1,9 @@
 import type { RemoteForm, RemoteFormInput } from '@sveltejs/kit'
 
+// TODO: add handleSubmit callback to allow user to call submit() themselves which will allow them to do client-driven single-flight mutations and optimistic updates
+
+// TODO: move delayMs and timeoutMs to creation so that we can use that for state handling
+
 /**
  * Parameters passed to the enhance handler
  */

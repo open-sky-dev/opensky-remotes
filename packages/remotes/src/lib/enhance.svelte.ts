@@ -4,6 +4,10 @@ import type { RemoteForm, RemoteFormInput } from '@sveltejs/kit'
 
 // TODO: move delayMs and timeoutMs to creation so that we can use that for state handling
 
+// TODO: rename `validator` to 'validation'
+
+// TODO: add a 'reset' to reset the state. integrate with remote form reset when added (pr is open)
+
 /**
  * Parameters passed to the enhance handler
  */

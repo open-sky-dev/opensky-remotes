@@ -4,7 +4,7 @@
 
 ### Added
 
-- `createEnhancedForm` helper for managing form submission lifecycle with state tracking and callbacks. Provides reactive state getters (idle, pending, delayed, timeout, issues, error, success) and integrates with createValidation for automatic validation handling.
+- `createEnhancedForm` helper for managing form submission lifecycle with state tracking and callbacks. Provides reactive state getters (idle, pending, delayed, timeout, issues, error, result) and integrates with createValidation for automatic validation handling.
 
 ## [0.0.1]
 

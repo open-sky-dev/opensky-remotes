@@ -27,7 +27,7 @@ type BaseEnhanceContext<TData, TResult> = EnhanceParams<TData> & {
 /**
  * Current state of the form submission lifecycle
  */
-type FormState = 'idle' | 'pending' | 'delayed' | 'timeout' | 'issues' | 'error' | 'success'
+type FormState = 'idle' | 'pending' | 'delayed' | 'timeout' | 'issues' | 'error' | 'result'
 
 /**
  * Optional validator integration for form validation
@@ -95,7 +95,7 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 
 	$effect(() => {
 		if (remote.result) {
-			state = 'success'
+			state = 'result'
 		}
 	})
 
@@ -138,7 +138,7 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 			if (timeoutTimer) clearTimeout(timeoutTimer)
 
 			if (remote.result) {
-				state = 'success'
+				state = 'result'
 				await onReturn?.({ ...baseContext, result: remote.result })
 				params.form.reset()
 			} else {
@@ -184,8 +184,8 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 		get error() {
 			return state === 'error'
 		},
-		get success() {
-			return state === 'success'
+		get result() {
+			return state === 'result'
 		}
 	}
 }

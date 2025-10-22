@@ -68,8 +68,8 @@ const form = createEnhancedForm(remoteForm, { validator: valid })
 Returns an object with:
 
 - `enhance(params, callbacks)` - Form enhancement handler
-- `state` - Current form state: idle | pending | delayed | timeout | issues | error | success
-- `idle`, `pending`, `delayed`, `timeout`, `issues`, `error`, `success` - Boolean getters for each state
+- `state` - Current form state: idle | pending | delayed | timeout | issues | error | result
+- `idle`, `pending`, `delayed`, `timeout`, `issues`, `error`, `result` - Boolean getters for each state
 
 Use with the remote form's enhance method:
 

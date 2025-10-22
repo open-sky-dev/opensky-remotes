@@ -2,7 +2,7 @@
 	"author": "notnotjake",
 	"name": "@opensky/remotes",
 	"description": "SvelteKit remotes helper utilities",
-	"version": "1.1.0",
+	"version": "0.0.2",
 	"repository": {
 		"directory": "packages/seo",
 		"type": "git",
@@ -13,10 +13,10 @@
 		"access": "public"
 	},
 	"dependencies": {
-		"zod": "^4.1.12"
+		"runed": "^0.35.1"
 	},
 	"peerDependencies": {
-		"@sveltejs/kit": "^2.0.0",
+		"@sveltejs/kit": "^2.27.0",
 		"svelte": "^5.0.0"
 	},
 	"devDependencies": {

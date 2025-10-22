@@ -2,8 +2,6 @@ import type { RemoteForm, RemoteFormInput } from '@sveltejs/kit'
 
 // TODO: add handleSubmit callback to allow user to call submit() themselves which will allow them to do client-driven single-flight mutations and optimistic updates
 
-// TODO: rename `validator` to 'validation'
-
 // TODO: add a 'reset' to reset the state. integrate with remote form reset when added (pr is open)
 
 /**
@@ -37,9 +35,9 @@ type FormState = 'idle' | 'pending' | 'delayed' | 'timeout' | 'issues' | 'error'
 type BaseFormState = 'idle' | 'pending' | 'issues' | 'error' | 'result'
 
 /**
- * Optional validator integration for form validation
+ * Optional validation integration for form validation
  */
-type Validator = {
+type Validation = {
 	/** Updates validation issues for all registered fields */
 	updateIssues: () => void | Promise<void>
 	/** Validates all registered fields */
@@ -50,8 +48,8 @@ type Validator = {
  * Options for creating an enhanced form
  */
 type CreateEnhancedFormOptions = {
-	/** Optional validator instance for form validation integration */
-	validator?: Validator
+	/** Optional validation instance from createValidation for form validation integration */
+	validation?: Validation
 	/** Milliseconds to wait before transitioning to 'delayed' state */
 	delayMs?: number
 	/** Milliseconds to wait before transitioning to 'timeout' state */
@@ -62,9 +60,9 @@ type CreateEnhancedFormOptions = {
  * Conditional state type based on delay/timeout presence
  */
 type ConditionalFormState<HasDelay extends boolean, HasTimeout extends boolean> =
-	BaseFormState |
-	(HasDelay extends true ? 'delayed' : never) |
-	(HasTimeout extends true ? 'timeout' : never)
+	| BaseFormState
+	| (HasDelay extends true ? 'delayed' : never)
+	| (HasTimeout extends true ? 'timeout' : never)
 
 /**
  * Base callback functions available for all forms
@@ -182,30 +180,34 @@ type EnhancedFormWithBoth<TOutput> = {
 /**
  * Creates an enhanced form with reactive state management and lifecycle callbacks
  * @param remote - The RemoteForm object from createRemote
- * @param options - Optional configuration including validator integration, delayMs, and timeoutMs
+ * @param options - Optional configuration including validation integration, delayMs, and timeoutMs
  * @returns An object with enhance handler and reactive state getters (conditionally includes delayed/timeout based on options)
  */
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
-	options: { validator?: Validator; delayMs: number; timeoutMs: number }
+	options: { validation?: Validation; delayMs: number; timeoutMs: number }
 ): EnhancedFormWithBoth<TOutput>
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
-	options: { validator?: Validator; delayMs: number; timeoutMs?: never }
+	options: { validation?: Validation; delayMs: number; timeoutMs?: never }
 ): EnhancedFormWithDelay<TOutput>
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
-	options: { validator?: Validator; delayMs?: never; timeoutMs: number }
+	options: { validation?: Validation; delayMs?: never; timeoutMs: number }
 ): EnhancedFormWithTimeout<TOutput>
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
-	options?: { validator?: Validator; delayMs?: never; timeoutMs?: never }
+	options?: { validation?: Validation; delayMs?: never; timeoutMs?: never }
 ): EnhancedFormNoTiming<TOutput>
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
 	options?: CreateEnhancedFormOptions
-): EnhancedFormNoTiming<TOutput> | EnhancedFormWithDelay<TOutput> | EnhancedFormWithTimeout<TOutput> | EnhancedFormWithBoth<TOutput> {
-	const { validator, delayMs, timeoutMs } = options ?? {}
+):
+	| EnhancedFormNoTiming<TOutput>
+	| EnhancedFormWithDelay<TOutput>
+	| EnhancedFormWithTimeout<TOutput>
+	| EnhancedFormWithBoth<TOutput> {
+	const { validation, delayMs, timeoutMs } = options ?? {}
 
 	type State = 'idle' | 'pending' | 'delayed' | 'timeout' | 'issues' | 'error' | 'result'
 	let state = $state<State>('idle')
@@ -264,8 +266,8 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 				const allIssues = remote.fields.allIssues()
 				if (allIssues && allIssues.length > 0) {
 					state = 'issues'
-					// Call validator.updateIssues if provided
-					await validator?.updateIssues()
+					// Call validation.updateIssues if provided
+					await validation?.updateIssues()
 					await onIssues?.(baseContext)
 				}
 			}
@@ -274,8 +276,8 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 			if (timeoutTimer) clearTimeout(timeoutTimer)
 
 			state = 'error'
-			// Call validator.validateAll if provided
-			await validator?.validateAll()
+			// Call validation.validateAll if provided
+			await validation?.validateAll()
 			await onError?.({ ...baseContext, error })
 		}
 	}

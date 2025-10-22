@@ -63,7 +63,7 @@ This allows you to add callbacks a little more easily (more like superforms) and
 import { createEnhancedForm } from '@opensky/remotes'
 
 const form = createEnhancedForm(remoteForm, {
-  validator: valid,
+  validation: valid,
   delayMs: 500,
   timeoutMs: 3500
 })
@@ -78,7 +78,7 @@ Returns an object with:
 - `timeout` - Boolean getter (only available if `timeoutMs` was provided)
 
 **Creation Options:**
-- `validator?` - Optional validator instance from `createValidation`
+- `validation?` - Optional validation instance from `createValidation`
 - `delayMs?` - Milliseconds to wait before transitioning to 'delayed' state
 - `timeoutMs?` - Milliseconds to wait before transitioning to 'timeout' state
 
@@ -134,7 +134,7 @@ Example of usage of both createValidation and createEnhancedForm
 
   const valid = createValidation(myForm)
   const form = createEnhancedForm(myForm, {
-    validator: valid,
+    validation: valid,
     delayMs: 500,
     timeoutMs: 3500
   })

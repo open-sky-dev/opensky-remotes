@@ -5,6 +5,7 @@
 ### Changed
 
 - **BREAKING**: Renamed `success` state to `result` throughout the enhanced form lifecycle for better semantic clarity.
+- **BREAKING**: Renamed `validator` option to `validation` in `createEnhancedForm` for consistency with `createValidation`.
 - **BREAKING**: Moved `delayMs` and `timeoutMs` from enhance callback options to `createEnhancedForm` creation options. This enables type-safe conditional states where `delayed` and `timeout` state accessors are only available when their corresponding timing options are provided. Callbacks (`onDelay`, `onTimeout`) are now optional but can only be used when the corresponding timing option is set at creation.
 
 ## [0.0.2]

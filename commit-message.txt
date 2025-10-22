@@ -1,0 +1,18 @@
+Move delayMs and timeoutMs to createEnhancedForm options
+
+This change moves the timing configuration from the enhance callback to the createEnhancedForm creation options, enabling type-safe conditional states and callbacks.
+
+Key improvements:
+- delayMs and timeoutMs are now specified at creation time
+- State type is conditional: 'delayed' only exists if delayMs is set, 'timeout' only exists if timeoutMs is set
+- Callbacks (onDelay, onTimeout) are type-checked: only allowed when the corresponding timing option is provided at creation
+- Both callbacks remain optional when their timing options are set
+- delayMs and timeoutMs are independent of each other
+
+Breaking changes:
+- Timing options must now be passed to createEnhancedForm() instead of form.enhance()
+- State accessors (delayed, timeout) are only available when the corresponding timing option is configured
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>

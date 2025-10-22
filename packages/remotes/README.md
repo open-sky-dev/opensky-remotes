@@ -62,14 +62,33 @@ This allows you to add callbacks a little more easily (more like superforms) and
 ```ts
 import { createEnhancedForm } from '@opensky/remotes'
 
-const form = createEnhancedForm(remoteForm, { validator: valid })
+const form = createEnhancedForm(remoteForm, {
+  validator: valid,
+  delayMs: 500,
+  timeoutMs: 3500
+})
 ```
 
 Returns an object with:
 
 - `enhance(params, callbacks)` - Form enhancement handler
-- `state` - Current form state: idle | pending | delayed | timeout | issues | error | result
-- `idle`, `pending`, `delayed`, `timeout`, `issues`, `error`, `result` - Boolean getters for each state
+- `state` - Current form state (type-safe based on creation options)
+- `idle`, `pending`, `issues`, `error`, `result` - Boolean getters (always available)
+- `delayed` - Boolean getter (only available if `delayMs` was provided)
+- `timeout` - Boolean getter (only available if `timeoutMs` was provided)
+
+**Creation Options:**
+- `validator?` - Optional validator instance from `createValidation`
+- `delayMs?` - Milliseconds to wait before transitioning to 'delayed' state
+- `timeoutMs?` - Milliseconds to wait before transitioning to 'timeout' state
+
+**Callbacks** (all optional):
+- `onSubmit` - Called when form submission begins
+- `onDelay` - Called when delayed state is reached (only allowed if `delayMs` is set)
+- `onTimeout` - Called when timeout state is reached (only allowed if `timeoutMs` is set)
+- `onReturn` - Called when form submission returns successfully
+- `onIssues` - Called when form submission returns with validation issues
+- `onError` - Called when form submission encounters an error
 
 Use with the remote form's enhance method:
 
@@ -77,13 +96,11 @@ Use with the remote form's enhance method:
 <form {...remoteForm.preflight(schema).enhance(opts =>
   form.enhance(opts, {
     onSubmit: () => {},
-    onDelay: () => {},      // requires delayMs
-    onTimeout: () => {},    // requires timeoutMs
+    onDelay: () => {},      // Only allowed if delayMs was set at creation
+    onTimeout: () => {},    // Only allowed if timeoutMs was set at creation
     onReturn: ({ result }) => {},
     onIssues: () => {},
-    onError: ({ error }) => {},
-    delayMs: 500,
-    timeoutMs: 3500
+    onError: ({ error }) => {}
   })
 )}>
   <!-- form fields -->
@@ -116,16 +133,18 @@ Example of usage of both createValidation and createEnhancedForm
   })
 
   const valid = createValidation(myForm)
-  const form = createEnhancedForm(myForm, { validator: valid })
+  const form = createEnhancedForm(myForm, {
+    validator: valid,
+    delayMs: 500,
+    timeoutMs: 3500
+  })
 </script>
 
 <p>State: {form.state}</p>
 
 <form {...myForm.preflight(schema).enhance(opts =>
   form.enhance(opts, {
-    delayMs: 500,
     onDelay: () => console.log('showing loader'),
-    timeoutMs: 3500,
     onTimeout: () => console.log('request timeout'),
     onReturn: ({ result }) => console.log('success', result)
   })

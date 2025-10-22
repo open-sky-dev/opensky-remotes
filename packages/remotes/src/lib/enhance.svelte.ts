@@ -2,8 +2,6 @@ import type { RemoteForm, RemoteFormInput } from '@sveltejs/kit'
 
 // TODO: add handleSubmit callback to allow user to call submit() themselves which will allow them to do client-driven single-flight mutations and optimistic updates
 
-// TODO: move delayMs and timeoutMs to creation so that we can use that for state handling
-
 // TODO: rename `validator` to 'validation'
 
 // TODO: add a 'reset' to reset the state. integrate with remote form reset when added (pr is open)
@@ -34,6 +32,11 @@ type BaseEnhanceContext<TData, TResult> = EnhanceParams<TData> & {
 type FormState = 'idle' | 'pending' | 'delayed' | 'timeout' | 'issues' | 'error' | 'result'
 
 /**
+ * Base form state (always present)
+ */
+type BaseFormState = 'idle' | 'pending' | 'issues' | 'error' | 'result'
+
+/**
  * Optional validator integration for form validation
  */
 type Validator = {
@@ -44,58 +47,168 @@ type Validator = {
 }
 
 /**
- * Callback functions for different stages of form submission
+ * Options for creating an enhanced form
  */
-type EnhanceCallbacks<TData, TResult> = {
+type CreateEnhancedFormOptions = {
+	/** Optional validator instance for form validation integration */
+	validator?: Validator
+	/** Milliseconds to wait before transitioning to 'delayed' state */
+	delayMs?: number
+	/** Milliseconds to wait before transitioning to 'timeout' state */
+	timeoutMs?: number
+}
+
+/**
+ * Conditional state type based on delay/timeout presence
+ */
+type ConditionalFormState<HasDelay extends boolean, HasTimeout extends boolean> =
+	BaseFormState |
+	(HasDelay extends true ? 'delayed' : never) |
+	(HasTimeout extends true ? 'timeout' : never)
+
+/**
+ * Base callback functions available for all forms
+ */
+type BaseCallbacks<TData, TResult> = {
 	/** Called when form submission begins */
 	onSubmit?: (ctx: BaseEnhanceContext<TData, TResult>) => void | Promise<void>
-	/** Called when submission takes longer than delayMs */
-	onDelay?: (ctx: BaseEnhanceContext<TData, TResult>) => void | Promise<void>
-	/** Called when submission takes longer than timeoutMs */
-	onTimeout?: (ctx: BaseEnhanceContext<TData, TResult>) => void | Promise<void>
 	/** Called when form submission returns successfully */
 	onReturn?: (ctx: BaseEnhanceContext<TData, TResult> & { result: TResult }) => void | Promise<void>
 	/** Called when form submission returns with validation issues */
 	onIssues?: (ctx: BaseEnhanceContext<TData, TResult>) => void | Promise<void>
 	/** Called when form submission encounters an error */
 	onError?: (ctx: BaseEnhanceContext<TData, TResult> & { error: unknown }) => void | Promise<void>
-	/** Milliseconds to wait before calling onDelay (requires onDelay callback) */
-	delayMs?: number
-	/** Milliseconds to wait before calling onTimeout (requires onTimeout callback) */
-	timeoutMs?: number
-} & ValidateDelayTimeout
+}
 
 /**
- * Type validation to ensure delay/timeout callbacks have corresponding durations
+ * Callbacks with no delay or timeout
  */
-type ValidateDelayTimeout =
-	| { onDelay?: never; delayMs?: number }
-	| { onDelay: Function; delayMs: number }
-	| { onTimeout?: never; timeoutMs?: number }
-	| { onTimeout: Function; timeoutMs: number }
-	| { onDelay: Function; delayMs: number; onTimeout: Function; timeoutMs: number }
-	| { onDelay?: never; onTimeout?: never }
+type CallbacksNoTiming<TData, TResult> = BaseCallbacks<TData, TResult>
 
 /**
- * Options for creating an enhanced form
+ * Callbacks with delay only
  */
-type CreateEnhancedFormOptions = {
-	/** Optional validator instance for form validation integration */
-	validator?: Validator
+type CallbacksWithDelay<TData, TResult> = BaseCallbacks<TData, TResult> & {
+	/** Called when submission takes longer than delayMs */
+	onDelay?: (ctx: BaseEnhanceContext<TData, TResult>) => void | Promise<void>
+}
+
+/**
+ * Callbacks with timeout only
+ */
+type CallbacksWithTimeout<TData, TResult> = BaseCallbacks<TData, TResult> & {
+	/** Called when submission takes longer than timeoutMs */
+	onTimeout?: (ctx: BaseEnhanceContext<TData, TResult>) => void | Promise<void>
+}
+
+/**
+ * Callbacks with both delay and timeout
+ */
+type CallbacksWithBoth<TData, TResult> = BaseCallbacks<TData, TResult> & {
+	/** Called when submission takes longer than delayMs */
+	onDelay?: (ctx: BaseEnhanceContext<TData, TResult>) => void | Promise<void>
+	/** Called when submission takes longer than timeoutMs */
+	onTimeout?: (ctx: BaseEnhanceContext<TData, TResult>) => void | Promise<void>
+}
+
+/**
+ * Return type with no delay or timeout
+ */
+type EnhancedFormNoTiming<TOutput> = {
+	enhance: <TData>(
+		params: EnhanceParams<TData>,
+		callbacks: CallbacksNoTiming<TData, TOutput>
+	) => Promise<void>
+	state: 'idle' | 'pending' | 'issues' | 'error' | 'result'
+	idle: boolean
+	pending: boolean
+	issues: boolean
+	error: boolean
+	result: boolean
+}
+
+/**
+ * Return type with delay only
+ */
+type EnhancedFormWithDelay<TOutput> = {
+	enhance: <TData>(
+		params: EnhanceParams<TData>,
+		callbacks: CallbacksWithDelay<TData, TOutput>
+	) => Promise<void>
+	state: 'idle' | 'pending' | 'delayed' | 'issues' | 'error' | 'result'
+	idle: boolean
+	pending: boolean
+	delayed: boolean
+	issues: boolean
+	error: boolean
+	result: boolean
+}
+
+/**
+ * Return type with timeout only
+ */
+type EnhancedFormWithTimeout<TOutput> = {
+	enhance: <TData>(
+		params: EnhanceParams<TData>,
+		callbacks: CallbacksWithTimeout<TData, TOutput>
+	) => Promise<void>
+	state: 'idle' | 'pending' | 'timeout' | 'issues' | 'error' | 'result'
+	idle: boolean
+	pending: boolean
+	timeout: boolean
+	issues: boolean
+	error: boolean
+	result: boolean
+}
+
+/**
+ * Return type with both delay and timeout
+ */
+type EnhancedFormWithBoth<TOutput> = {
+	enhance: <TData>(
+		params: EnhanceParams<TData>,
+		callbacks: CallbacksWithBoth<TData, TOutput>
+	) => Promise<void>
+	state: 'idle' | 'pending' | 'delayed' | 'timeout' | 'issues' | 'error' | 'result'
+	idle: boolean
+	pending: boolean
+	delayed: boolean
+	timeout: boolean
+	issues: boolean
+	error: boolean
+	result: boolean
 }
 
 /**
  * Creates an enhanced form with reactive state management and lifecycle callbacks
  * @param remote - The RemoteForm object from createRemote
- * @param options - Optional configuration including validator integration
- * @returns An object with enhance handler and reactive state getters
+ * @param options - Optional configuration including validator integration, delayMs, and timeoutMs
+ * @returns An object with enhance handler and reactive state getters (conditionally includes delayed/timeout based on options)
  */
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
+	options: { validator?: Validator; delayMs: number; timeoutMs: number }
+): EnhancedFormWithBoth<TOutput>
+export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
+	remote: RemoteForm<TInput, TOutput>,
+	options: { validator?: Validator; delayMs: number; timeoutMs?: never }
+): EnhancedFormWithDelay<TOutput>
+export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
+	remote: RemoteForm<TInput, TOutput>,
+	options: { validator?: Validator; delayMs?: never; timeoutMs: number }
+): EnhancedFormWithTimeout<TOutput>
+export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
+	remote: RemoteForm<TInput, TOutput>,
+	options?: { validator?: Validator; delayMs?: never; timeoutMs?: never }
+): EnhancedFormNoTiming<TOutput>
+export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
+	remote: RemoteForm<TInput, TOutput>,
 	options?: CreateEnhancedFormOptions
-) {
-	let state = $state<FormState>('idle')
-	const { validator } = options ?? {}
+): EnhancedFormNoTiming<TOutput> | EnhancedFormWithDelay<TOutput> | EnhancedFormWithTimeout<TOutput> | EnhancedFormWithBoth<TOutput> {
+	const { validator, delayMs, timeoutMs } = options ?? {}
+
+	type State = 'idle' | 'pending' | 'delayed' | 'timeout' | 'issues' | 'error' | 'result'
+	let state = $state<State>('idle')
 
 	$effect(() => {
 		if (remote.result) {
@@ -105,10 +218,12 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 
 	const enhanceHandler = async <TData>(
 		params: EnhanceParams<TData>,
-		callbacks: EnhanceCallbacks<TData, TOutput>
+		callbacks: BaseCallbacks<TData, TOutput> & {
+			onDelay?: (ctx: BaseEnhanceContext<TData, TOutput>) => void | Promise<void>
+			onTimeout?: (ctx: BaseEnhanceContext<TData, TOutput>) => void | Promise<void>
+		}
 	) => {
-		const { onSubmit, onDelay, onTimeout, onReturn, onIssues, onError, delayMs, timeoutMs } =
-			callbacks
+		const { onSubmit, onDelay, onTimeout, onReturn, onIssues, onError } = callbacks
 
 		let delayTimer: ReturnType<typeof setTimeout> | null = null
 		let timeoutTimer: ReturnType<typeof setTimeout> | null = null
@@ -122,17 +237,17 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 			state = 'pending'
 			await onSubmit?.(baseContext)
 
-			if (onDelay && delayMs != null) {
+			if (delayMs != null) {
 				delayTimer = setTimeout(() => {
 					state = 'delayed'
-					onDelay(baseContext)
+					onDelay?.(baseContext)
 				}, delayMs)
 			}
 
-			if (onTimeout && timeoutMs != null) {
+			if (timeoutMs != null) {
 				timeoutTimer = setTimeout(() => {
 					state = 'timeout'
-					onTimeout(baseContext)
+					onTimeout?.(baseContext)
 				}, timeoutMs)
 			}
 
@@ -165,7 +280,7 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 		}
 	}
 
-	return {
+	const baseReturn = {
 		enhance: enhanceHandler,
 		get state() {
 			return state
@@ -175,12 +290,6 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 		},
 		get pending() {
 			return state === 'pending'
-		},
-		get delayed() {
-			return state === 'delayed'
-		},
-		get timeout() {
-			return state === 'timeout'
 		},
 		get issues() {
 			return state === 'issues'
@@ -192,4 +301,32 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 			return state === 'result'
 		}
 	}
+
+	if (delayMs != null && timeoutMs != null) {
+		return {
+			...baseReturn,
+			get delayed() {
+				return state === 'delayed'
+			},
+			get timeout() {
+				return state === 'timeout'
+			}
+		} as any
+	} else if (delayMs != null) {
+		return {
+			...baseReturn,
+			get delayed() {
+				return state === 'delayed'
+			}
+		} as any
+	} else if (timeoutMs != null) {
+		return {
+			...baseReturn,
+			get timeout() {
+				return state === 'timeout'
+			}
+		} as any
+	}
+
+	return baseReturn as any
 }

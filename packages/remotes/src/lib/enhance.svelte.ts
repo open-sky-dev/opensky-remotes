@@ -1,4 +1,4 @@
-import type { RemoteForm, RemoteFormInput } from '@sveltejs/kit'
+import type { RemoteForm, RemoteFormInput, RemoteQuery, RemoteQueryOverride } from '@sveltejs/kit'
 
 // TODO: add handleSubmit callback to allow user to call submit() themselves which will allow them to do client-driven single-flight mutations and optimistic updates
 
@@ -63,11 +63,21 @@ type ConditionalFormState<HasDelay extends boolean, HasTimeout extends boolean> 
 	| (HasTimeout extends true ? 'timeout' : never)
 
 /**
+ * Submit context with cancel and updates functions
+ */
+type SubmitContext<TData, TResult> = BaseEnhanceContext<TData, TResult> & {
+	/** Cancel the submission and optionally set state to 'error' or 'issues'. Defaults to 'idle' if no argument provided. */
+	cancel: (state?: 'error' | 'issues') => void
+	/** Provide queries/overrides to be passed to submit().updates(...) for optimistic updates */
+	updates: (...queries: Array<RemoteQuery<any> | RemoteQueryOverride>) => void
+}
+
+/**
  * Base callback functions available for all forms
  */
 type BaseCallbacks<TData, TResult> = {
 	/** Called when form submission begins */
-	onSubmit?: (ctx: BaseEnhanceContext<TData, TResult>) => void | Promise<void>
+	onSubmit?: (ctx: SubmitContext<TData, TResult>) => void | Promise<void>
 	/** Called when form submission returns successfully */
 	onReturn?: (ctx: BaseEnhanceContext<TData, TResult> & { result: TResult }) => void | Promise<void>
 	/** Called when form submission returns with validation issues */
@@ -231,15 +241,35 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 
 		let delayTimer: ReturnType<typeof setTimeout> | null = null
 		let timeoutTimer: ReturnType<typeof setTimeout> | null = null
+		let cancelled = false
+		let cancelledState: 'idle' | 'error' | 'issues' = 'idle'
+		let updateQueries: any[] = []
 
 		const baseContext: BaseEnhanceContext<TData, TOutput> = {
 			...params,
 			remote
 		}
 
+		const submitContext: SubmitContext<TData, TOutput> = {
+			...baseContext,
+			cancel: (cancelState?: 'error' | 'issues') => {
+				cancelled = true
+				cancelledState = cancelState ?? 'idle'
+			},
+			updates: (...queries: Array<RemoteQuery<any> | RemoteQueryOverride>) => {
+				updateQueries = queries
+			}
+		}
+
 		try {
 			state = 'pending'
-			await onSubmit?.(baseContext)
+			await onSubmit?.(submitContext)
+
+			// If cancelled, set the state and return early
+			if (cancelled) {
+				state = cancelledState
+				return
+			}
 
 			if (delayMs != null) {
 				delayTimer = setTimeout(() => {
@@ -255,7 +285,12 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 				}, timeoutMs)
 			}
 
-			await params.submit()
+			// Call submit with or without updates
+			if (updateQueries.length > 0) {
+				await params.submit().updates(...updateQueries)
+			} else {
+				await params.submit()
+			}
 
 			if (delayTimer) clearTimeout(delayTimer)
 			if (timeoutTimer) clearTimeout(timeoutTimer)

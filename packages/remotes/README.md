@@ -21,6 +21,7 @@ Returns an object with:
 - `fields(path: string)` - Returns `onblur` and `oninput` handlers for a field path
 - `issues(path: string)` - Returns validation issues for a field path
 - `allIssues()` - Returns all validation issues
+- `addIssue(path: string, issue: string)` - Adds a custom validation error to a field
 - `reset()` - Clears all validation issues
 - `validateAll()` - Validates all registered fields (with server)
 - `updateIssues()` - Updates issues for all registered fields (populates from issues)
@@ -30,10 +31,10 @@ Use `.fields()` to add the fields you want validated. Use string access like `'a
 Then use `.issues()` to get issues by field path the same way. This returns an array of strings or null. So you can easily use it as a check for styling like `class:border-red-500={valid.issues('address.state')}`
 
 ```svelte
-<input 
-  {...remoteForm.fields.address.state.as('text')} 
+<input
+  {...remoteForm.fields.address.state.as('text')}
   {...valid.fields('address.state')}
-  class:border-red-500={valid.issues('address.state')} 
+  class:border-red-500={valid.issues('address.state')}
 />
 
 {#if valid.issues('address.state')}
@@ -72,6 +73,7 @@ const form = createEnhancedForm(remoteForm, {
 Returns an object with:
 
 - `enhance(params, callbacks)` - Form enhancement handler
+- `reset()` - Resets the form state back to 'idle'
 - `state` - Current form state (type-safe based on creation options)
 - `idle`, `pending`, `issues`, `error`, `result` - Boolean getters (always available)
 - `delayed` - Boolean getter (only available if `delayMs` was provided)
@@ -83,7 +85,9 @@ Returns an object with:
 - `timeoutMs?` - Milliseconds to wait before transitioning to 'timeout' state
 
 **Callbacks** (all optional):
-- `onSubmit` - Called when form submission begins
+- `onSubmit` - Called when form submission begins. Receives `cancel()` and `updates()` functions:
+  - `cancel(state?)` - Cancel submission and set state to 'idle' (default), 'error', or 'issues'
+  - `updates(...queries)` - Provide queries/overrides for optimistic updates via `submit().updates(...)`
 - `onDelay` - Called when delayed state is reached (only allowed if `delayMs` is set)
 - `onTimeout` - Called when timeout state is reached (only allowed if `timeoutMs` is set)
 - `onReturn` - Called when form submission returns successfully
@@ -95,7 +99,17 @@ Use with the remote form's enhance method:
 ```svelte
 <form {...remoteForm.preflight(schema).enhance(opts =>
   form.enhance(opts, {
-    onSubmit: () => {},
+    onSubmit: ({ cancel, updates, data }) => {
+      // Custom client-side checks before submission
+      if (!customValidationCheck(data)) {
+        valid.addIssue('fieldName', 'Custom validation failed')
+        cancel('issues') // Cancel and set state to 'issues'
+        return
+      }
+
+      // Optimistic updates
+      updates(getPosts().withOverride((posts) => [newPost, ...posts]))
+    },
     onDelay: () => {},      // Only allowed if delayMs was set at creation
     onTimeout: () => {},    // Only allowed if timeoutMs was set at creation
     onReturn: ({ result }) => {},

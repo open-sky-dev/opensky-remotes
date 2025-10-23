@@ -107,6 +107,20 @@ export function createValidation(form: RemoteForm<any, any>) {
 	}
 
 	/**
+	 * Adds a custom validation issue to a field
+	 * @param path - The dot-notation path to the field (e.g., 'name' or 'address.state')
+	 * @param issue - The validation error message to add
+	 */
+	function addIssue(path: string, issue: string) {
+		const existingIssues = getNestedValue(path)
+		if (existingIssues) {
+			setNestedValue(issues, path, [...existingIssues, issue])
+		} else {
+			setNestedValue(issues, path, [issue])
+		}
+	}
+
+	/**
 	 * Returns reactive field bindings and event handlers for a field path
 	 * @param path - The dot-notation path to the field (e.g., 'name' or 'address.state')
 	 */
@@ -170,6 +184,7 @@ export function createValidation(form: RemoteForm<any, any>) {
 		allIssues: getAllIssues,
 		validateAll,
 		reset,
-		updateIssues
+		updateIssues,
+		addIssue
 	}
 }

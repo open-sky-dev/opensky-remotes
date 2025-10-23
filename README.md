@@ -72,6 +72,7 @@ const form = createEnhancedForm(remoteForm, {
 Returns an object with:
 
 - `enhance(params, callbacks)` - Form enhancement handler
+- `reset()` - Resets the form state back to 'idle'
 - `state` - Current form state (type-safe based on creation options)
 - `idle`, `pending`, `issues`, `error`, `result` - Boolean getters (always available)
 - `delayed` - Boolean getter (only available if `delayMs` was provided)

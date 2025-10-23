@@ -2,8 +2,6 @@ import type { RemoteForm, RemoteFormInput } from '@sveltejs/kit'
 
 // TODO: add handleSubmit callback to allow user to call submit() themselves which will allow them to do client-driven single-flight mutations and optimistic updates
 
-// TODO: add a 'reset' to reset the state. integrate with remote form reset when added (pr is open)
-
 /**
  * Parameters passed to the enhance handler
  */
@@ -117,6 +115,7 @@ type EnhancedFormNoTiming<TOutput> = {
 		params: EnhanceParams<TData>,
 		callbacks: CallbacksNoTiming<TData, TOutput>
 	) => Promise<void>
+	reset: () => void
 	state: 'idle' | 'pending' | 'issues' | 'error' | 'result'
 	idle: boolean
 	pending: boolean
@@ -133,6 +132,7 @@ type EnhancedFormWithDelay<TOutput> = {
 		params: EnhanceParams<TData>,
 		callbacks: CallbacksWithDelay<TData, TOutput>
 	) => Promise<void>
+	reset: () => void
 	state: 'idle' | 'pending' | 'delayed' | 'issues' | 'error' | 'result'
 	idle: boolean
 	pending: boolean
@@ -150,6 +150,7 @@ type EnhancedFormWithTimeout<TOutput> = {
 		params: EnhanceParams<TData>,
 		callbacks: CallbacksWithTimeout<TData, TOutput>
 	) => Promise<void>
+	reset: () => void
 	state: 'idle' | 'pending' | 'timeout' | 'issues' | 'error' | 'result'
 	idle: boolean
 	pending: boolean
@@ -167,6 +168,7 @@ type EnhancedFormWithBoth<TOutput> = {
 		params: EnhanceParams<TData>,
 		callbacks: CallbacksWithBoth<TData, TOutput>
 	) => Promise<void>
+	reset: () => void
 	state: 'idle' | 'pending' | 'delayed' | 'timeout' | 'issues' | 'error' | 'result'
 	idle: boolean
 	pending: boolean
@@ -282,8 +284,13 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 		}
 	}
 
+	const reset = () => {
+		state = 'idle'
+	}
+
 	const baseReturn = {
 		enhance: enhanceHandler,
+		reset,
 		get state() {
 			return state
 		},
@@ -306,26 +313,83 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 
 	if (delayMs != null && timeoutMs != null) {
 		return {
-			...baseReturn,
+			enhance: enhanceHandler,
+			reset,
+			get state() {
+				return state
+			},
+			get idle() {
+				return state === 'idle'
+			},
+			get pending() {
+				return state === 'pending'
+			},
 			get delayed() {
 				return state === 'delayed'
 			},
 			get timeout() {
 				return state === 'timeout'
+			},
+			get issues() {
+				return state === 'issues'
+			},
+			get error() {
+				return state === 'error'
+			},
+			get result() {
+				return state === 'result'
 			}
 		} as any
 	} else if (delayMs != null) {
 		return {
-			...baseReturn,
+			enhance: enhanceHandler,
+			reset,
+			get state() {
+				return state
+			},
+			get idle() {
+				return state === 'idle'
+			},
+			get pending() {
+				return state === 'pending'
+			},
 			get delayed() {
 				return state === 'delayed'
+			},
+			get issues() {
+				return state === 'issues'
+			},
+			get error() {
+				return state === 'error'
+			},
+			get result() {
+				return state === 'result'
 			}
 		} as any
 	} else if (timeoutMs != null) {
 		return {
-			...baseReturn,
+			enhance: enhanceHandler,
+			reset,
+			get state() {
+				return state
+			},
+			get idle() {
+				return state === 'idle'
+			},
+			get pending() {
+				return state === 'pending'
+			},
 			get timeout() {
 				return state === 'timeout'
+			},
+			get issues() {
+				return state === 'issues'
+			},
+			get error() {
+				return state === 'error'
+			},
+			get result() {
+				return state === 'result'
 			}
 		} as any
 	}

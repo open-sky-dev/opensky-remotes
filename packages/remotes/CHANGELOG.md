@@ -2,6 +2,10 @@
 
 ## [0.0.3]
 
+### Added
+
+- Added `reset()` method to enhanced form instances for manually resetting state back to 'idle'.
+
 ### Changed
 
 - **BREAKING**: Renamed `success` state to `result` throughout the enhanced form lifecycle for better semantic clarity.

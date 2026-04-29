@@ -31,7 +31,6 @@
 		"prettier-plugin-svelte": "^3.4.0",
 		"publint": "^0.3.15",
 		"svelte": "^5.41.1",
-		"svelte-check": "^4.3.3",
 		"typescript": "^5.9.3",
 		"typescript-eslint": "^8.46.2",
 		"vite": "^7.1.11"
@@ -60,7 +59,7 @@
 	"types": "./dist/index.d.ts",
 	"scripts": {
 		"build": "svelte-kit sync && svelte-package && publint",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check": "svelte-kit sync && tsc --noEmit --project ./tsconfig.json",
 		"format": "prettier --write .",
 		"lint": "prettier --check . && eslint .",
 		"prepack": "bun run build",

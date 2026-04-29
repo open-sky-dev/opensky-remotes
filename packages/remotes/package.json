@@ -4,9 +4,9 @@
 	"description": "SvelteKit remotes helper utilities",
 	"version": "0.0.3",
 	"repository": {
-		"directory": "packages/seo",
+		"directory": "packages/remotes",
 		"type": "git",
-		"url": "https://github.com/open-sky-dev/opensky-remotes.git"
+		"url": "git+https://github.com/open-sky-dev/opensky-remotes.git"
 	},
 	"license": "MIT",
 	"publishConfig": {
@@ -19,7 +19,6 @@
 	"devDependencies": {
 		"@eslint/compat": "^1.4.0",
 		"@eslint/js": "^9.38.0",
-		"@sveltejs/adapter-auto": "^6.1.1",
 		"@sveltejs/kit": "^2.57.1",
 		"@sveltejs/package": "^2.5.4",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
@@ -51,31 +50,20 @@
 	"keywords": [
 		"svelte",
 		"sveltekit",
-		"metadata",
-		"seo",
-		"utility",
-		"meta-tags",
-		"open-graph",
-		"head",
-		"svelte-meta",
-		"svelte-seo"
-	],
-	"private": false,
-	"scripts": {
-		"build": "vite build && npm run prepack",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"dev": "vite dev",
-		"format": "prettier --write .",
-		"lint": "prettier --check . && eslint .",
-		"prepack": "svelte-kit sync && svelte-package && publint",
-		"prepare": "svelte-kit sync || echo ''",
-		"preview": "vite preview"
-	},
-	"sideEffects": [
-		"**/*.css"
+		"remote-functions",
+		"forms",
+		"validation",
+		"utility"
 	],
 	"svelte": "./dist/index.js",
 	"type": "module",
-	"types": "./dist/index.d.ts"
+	"types": "./dist/index.d.ts",
+	"scripts": {
+		"build": "svelte-kit sync && svelte-package && publint",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"format": "prettier --write .",
+		"lint": "prettier --check . && eslint .",
+		"prepack": "bun run build",
+		"prepare": "svelte-kit sync || echo ''"
+	}
 }

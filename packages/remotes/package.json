@@ -12,9 +12,6 @@
 	"publishConfig": {
 		"access": "public"
 	},
-	"dependencies": {
-		"runed": "^0.35.1"
-	},
 	"peerDependencies": {
 		"@sveltejs/kit": ">=2.57.1 <3",
 		"svelte": "^5.0.0"

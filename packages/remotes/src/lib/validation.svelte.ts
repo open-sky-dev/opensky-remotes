@@ -1,5 +1,4 @@
 import type { RemoteForm, RemoteFormIssue } from '@sveltejs/kit'
-import { useDebounce } from 'runed'
 
 type ValidationIssues = {
 	[key: string]: string[] | null | ValidationIssues
@@ -7,6 +6,11 @@ type ValidationIssues = {
 
 type FieldWithIssues = {
 	issues: () => RemoteFormIssue[] | undefined
+}
+
+type ValidationWaiter = {
+	resolve: () => void
+	reject: (error: unknown) => void
 }
 
 /**
@@ -87,13 +91,37 @@ export function createValidation(form: RemoteForm<any, any>) {
 		}
 	}
 
-	let debounceDuration = $state(500)
-	const remoteValidate = useDebounce(
-		async () => {
-			await form.validate()
-		},
-		() => debounceDuration
-	)
+	/**
+	 * Debounced remote validation to avoid sending repeated validation requests while input is settling
+	 */
+	let remoteValidationTimer: ReturnType<typeof setTimeout> | null = null
+	let remoteValidationWaiters: ValidationWaiter[] = []
+
+	function remoteValidate() {
+		if (remoteValidationTimer) {
+			clearTimeout(remoteValidationTimer)
+		}
+
+		const validation = new Promise<void>((resolve, reject) => {
+			remoteValidationWaiters.push({ resolve, reject })
+		})
+
+		remoteValidationTimer = setTimeout(async () => {
+			remoteValidationTimer = null
+
+			const waiters = remoteValidationWaiters
+			remoteValidationWaiters = []
+
+			try {
+				await form.validate()
+				waiters.forEach(({ resolve }) => resolve())
+			} catch (error) {
+				waiters.forEach(({ reject }) => reject(error))
+			}
+		}, 280)
+
+		return validation
+	}
 
 	/**
 	 * Validates all registered fields

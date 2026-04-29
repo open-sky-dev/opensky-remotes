@@ -18,27 +18,29 @@ const valid = createValidation(remoteForm)
 
 Returns an object with:
 
-- `fields(path: string)` - Returns `onblur` and `oninput` handlers for a field path
-- `issues(path: string)` - Returns validation issues for a field path
-- `allIssues()` - Returns all validation issues
-- `addIssue(path: string, issue: string)` - Adds a custom validation error to a field
-- `reset()` - Clears all validation issues
+- `fields` - Type-safe validation field helpers that mirror the remote form's field shape
+- `fields.some.path.handlers` - Returns `onblur` and `oninput` handlers for a field
+- `fields.some.path.issues` - Returns validation issues for a field
+- `fields.some.path.addIssues(issues: string | string[])` - Adds one or more custom validation errors to a field
+- `fields.some.path.clearIssues()` - Clears validation issues for a field
+- `allIssues` - Returns all validation issues
+- `clearAllIssues()` - Clears all validation issues
 - `validateAll()` - Validates all registered fields (with server)
 - `updateIssues()` - Updates issues for all registered fields (populates from issues)
 
-Use `.fields()` to add the fields you want validated. Use string access like `'address.state'` to reference the fields.
+Use `.fields.some.path.handlers` to add the fields you want validated. The validation field shape mirrors the remote form field shape, so TypeScript can catch renamed or misspelled fields.
 
-Then use `.issues()` to get issues by field path the same way. This returns an array of strings or null. So you can easily use it as a check for styling like `class:border-red-500={valid.issues('address.state')}`
+Then use `.fields.some.path.issues` to get issues by field path the same way. This returns an array of strings or null. So you can easily use it as a check for styling like `class:border-red-500={valid.fields.address.state.issues}`
 
 ```svelte
 <input
 	{...remoteForm.fields.address.state.as('text')}
-	{...valid.fields('address.state')}
-	class:border-red-500={valid.issues('address.state')}
+	{...valid.fields.address.state.handlers}
+	class:border-red-500={valid.fields.address.state.issues}
 />
 
-{#if valid.issues('address.state')}
-	{#each valid.issues('address.state') as issue}
+{#if valid.fields.address.state.issues}
+	{#each valid.fields.address.state.issues as issue}
 		<p>{issue}</p>
 	{/each}
 {/if}
@@ -105,7 +107,7 @@ Use with the remote form's enhance method:
 			onSubmit: ({ cancel, updates, data }) => {
 				// Custom client-side checks before submission
 				if (!customValidationCheck(data)) {
-					valid.addIssue('fieldName', 'Custom validation failed')
+					valid.fields.fieldName.addIssues('Custom validation failed')
 					cancel('issues') // Cancel and set state to 'issues'
 					return
 				}
@@ -171,20 +173,20 @@ Example of usage of both createValidation and createEnhancedForm
 >
 	<input
 		{...myForm.fields.name.as('text')}
-		{...valid.fields('name')}
-		class:error={valid.issues('name')}
+		{...valid.fields.name.handlers}
+		class:error={valid.fields.name.issues}
 	/>
 
-	{#if valid.issues('name')}
-		{#each valid.issues('name') as issue}
+	{#if valid.fields.name.issues}
+		{#each valid.fields.name.issues as issue}
 			<p class="error">{issue}</p>
 		{/each}
 	{/if}
 
 	<input
 		{...myForm.fields.address.state.as('text')}
-		{...valid.fields('address.state')}
-		class:error={valid.issues('address.state')}
+		{...valid.fields.address.state.handlers}
+		class:error={valid.fields.address.state.issues}
 	/>
 
 	<button disabled={form.pending || form.delayed}>

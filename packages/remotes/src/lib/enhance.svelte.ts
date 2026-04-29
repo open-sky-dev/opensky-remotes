@@ -1,6 +1,4 @@
-import type { RemoteForm, RemoteFormInput, RemoteQuery, RemoteQueryOverride } from '@sveltejs/kit'
-
-// TODO: add handleSubmit callback to allow user to call submit() themselves which will allow them to do client-driven single-flight mutations and optimistic updates
+import type { RemoteForm, RemoteFormInput, RemoteQueryUpdate } from '@sveltejs/kit'
 
 /**
  * Parameters passed to the enhance handler
@@ -9,7 +7,9 @@ type EnhanceParams<TData> = {
 	/** The HTML form element being submitted */
 	form: HTMLFormElement
 	/** Function to submit the form */
-	submit: () => Promise<void>
+	submit: () => Promise<boolean> & {
+		updates: (...queries: Array<RemoteQueryUpdate>) => Promise<boolean>
+	}
 	/** Form data being submitted */
 	data: TData
 }
@@ -69,7 +69,7 @@ type SubmitContext<TData, TResult> = BaseEnhanceContext<TData, TResult> & {
 	/** Cancel the submission and optionally set state to 'error' or 'issues'. Defaults to 'idle' if no argument provided. */
 	cancel: (state?: 'error' | 'issues') => void
 	/** Provide queries/overrides to be passed to submit().updates(...) for optimistic updates */
-	updates: (...queries: Array<RemoteQuery<any> | RemoteQueryOverride>) => void
+	updates: (...queries: Array<RemoteQueryUpdate>) => void
 }
 
 /**
@@ -224,12 +224,6 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 	type State = 'idle' | 'pending' | 'delayed' | 'timeout' | 'issues' | 'error' | 'result'
 	let state = $state<State>('idle')
 
-	$effect(() => {
-		if (remote.result) {
-			state = 'result'
-		}
-	})
-
 	const enhanceHandler = async <TData>(
 		params: EnhanceParams<TData>,
 		callbacks: BaseCallbacks<TData, TOutput> & {
@@ -243,7 +237,7 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 		let timeoutTimer: ReturnType<typeof setTimeout> | null = null
 		let cancelled = false
 		let cancelledState: 'idle' | 'error' | 'issues' = 'idle'
-		let updateQueries: any[] = []
+		let updateQueries: RemoteQueryUpdate[] = []
 
 		const baseContext: BaseEnhanceContext<TData, TOutput> = {
 			...params,
@@ -256,7 +250,7 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 				cancelled = true
 				cancelledState = cancelState ?? 'idle'
 			},
-			updates: (...queries: Array<RemoteQuery<any> | RemoteQueryOverride>) => {
+			updates: (...queries: Array<RemoteQueryUpdate>) => {
 				updateQueries = queries
 			}
 		}
@@ -285,28 +279,23 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 				}, timeoutMs)
 			}
 
-			// Call submit with or without updates
-			if (updateQueries.length > 0) {
-				await params.submit().updates(...updateQueries)
-			} else {
-				await params.submit()
-			}
+			const valid =
+				updateQueries.length > 0
+					? await params.submit().updates(...updateQueries)
+					: await params.submit()
 
 			if (delayTimer) clearTimeout(delayTimer)
 			if (timeoutTimer) clearTimeout(timeoutTimer)
 
-			if (remote.result) {
+			if (valid) {
 				state = 'result'
-				await onReturn?.({ ...baseContext, result: remote.result })
+				await onReturn?.({ ...baseContext, result: remote.result as TOutput })
 				params.form.reset()
 			} else {
-				const allIssues = remote.fields.allIssues()
-				if (allIssues && allIssues.length > 0) {
-					state = 'issues'
-					// Call validation.updateIssues if provided
-					await validation?.updateIssues()
-					await onIssues?.(baseContext)
-				}
+				state = 'issues'
+				// Call validation.updateIssues if provided
+				await validation?.updateIssues()
+				await onIssues?.(baseContext)
 			}
 		} catch (error) {
 			if (delayTimer) clearTimeout(delayTimer)

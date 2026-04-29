@@ -32,15 +32,15 @@ Then use `.issues()` to get issues by field path the same way. This returns an a
 
 ```svelte
 <input
-  {...remoteForm.fields.address.state.as('text')}
-  {...valid.fields('address.state')}
-  class:border-red-500={valid.issues('address.state')}
+	{...remoteForm.fields.address.state.as('text')}
+	{...valid.fields('address.state')}
+	class:border-red-500={valid.issues('address.state')}
 />
 
 {#if valid.issues('address.state')}
-  {#each valid.issues('address.state') as issue}
-    <p>{issue}</p>
-  {/each}
+	{#each valid.issues('address.state') as issue}
+		<p>{issue}</p>
+	{/each}
 {/if}
 ```
 
@@ -64,9 +64,9 @@ This allows you to add callbacks a little more easily (more like superforms) and
 import { createEnhancedForm } from '@opensky/remotes'
 
 const form = createEnhancedForm(remoteForm, {
-  validation: valid,
-  delayMs: 500,
-  timeoutMs: 3500
+	validation: valid,
+	delayMs: 500,
+	timeoutMs: 3500
 })
 ```
 
@@ -80,11 +80,13 @@ Returns an object with:
 - `timeout` - Boolean getter (only available if `timeoutMs` was provided)
 
 **Creation Options:**
+
 - `validation?` - Optional validation instance from `createValidation`
 - `delayMs?` - Milliseconds to wait before transitioning to 'delayed' state
 - `timeoutMs?` - Milliseconds to wait before transitioning to 'timeout' state
 
 **Callbacks** (all optional):
+
 - `onSubmit` - Called when form submission begins. Receives `cancel()` and `updates()` functions:
   - `cancel(state?)` - Cancel submission and set state to 'idle' (default), 'error', or 'issues'
   - `updates(...queries)` - Provide queries/overrides for optimistic updates via `submit().updates(...)`
@@ -97,35 +99,37 @@ Returns an object with:
 Use with the remote form's enhance method:
 
 ```svelte
-<form {...remoteForm.preflight(schema).enhance(opts =>
-  form.enhance(opts, {
-    onSubmit: ({ cancel, updates, data }) => {
-      // Custom client-side checks before submission
-      if (!customValidationCheck(data)) {
-        valid.addIssue('fieldName', 'Custom validation failed')
-        cancel('issues') // Cancel and set state to 'issues'
-        return
-      }
+<form
+	{...remoteForm.preflight(schema).enhance((opts) =>
+		form.enhance(opts, {
+			onSubmit: ({ cancel, updates, data }) => {
+				// Custom client-side checks before submission
+				if (!customValidationCheck(data)) {
+					valid.addIssue('fieldName', 'Custom validation failed')
+					cancel('issues') // Cancel and set state to 'issues'
+					return
+				}
 
-      // Optimistic updates
-      updates(getPosts().withOverride((posts) => [newPost, ...posts]))
-    },
-    onDelay: () => {},      // Only allowed if delayMs was set at creation
-    onTimeout: () => {},    // Only allowed if timeoutMs was set at creation
-    onReturn: ({ result }) => {},
-    onIssues: () => {},
-    onError: ({ error }) => {}
-  })
-)}>
-  <!-- form fields -->
+				// Optimistic updates
+				updates(getPosts().withOverride((posts) => [newPost, ...posts]))
+			},
+			onDelay: () => {}, // Only allowed if delayMs was set at creation
+			onTimeout: () => {}, // Only allowed if timeoutMs was set at creation
+			onReturn: ({ result }) => {},
+			onIssues: () => {},
+			onError: ({ error }) => {}
+		})
+	)}
+>
+	<!-- form fields -->
 
-  <button disabled={form.pending || form.delayed}>
-    {form.delayed ? 'Loading...' : 'Submit'}
-  </button>
+	<button disabled={form.pending || form.delayed}>
+		{form.delayed ? 'Loading...' : 'Submit'}
+	</button>
 </form>
 
 {#if form.timeout}
-  <p>Request timed out</p>
+	<p>Request timed out</p>
 {/if}
 ```
 
@@ -135,58 +139,60 @@ Example of usage of both createValidation and createEnhancedForm
 
 ```svelte
 <script lang="ts">
-  import { createValidation, createEnhancedForm } from '@opensky/remotes'
-  import { myForm } from './myForm.remote'
-  import { z } from 'zod'
+	import { createValidation, createEnhancedForm } from '@opensky/remotes'
+	import { myForm } from './myForm.remote'
+	import { z } from 'zod'
 
-  const schema = z.object({
-    name: z.string().min(4, 'Too short').max(10, 'Too long'),
-    address: z.object({
-      state: z.string()
-    })
-  })
+	const schema = z.object({
+		name: z.string().min(4, 'Too short').max(10, 'Too long'),
+		address: z.object({
+			state: z.string()
+		})
+	})
 
-  const valid = createValidation(myForm)
-  const form = createEnhancedForm(myForm, {
-    validation: valid,
-    delayMs: 500,
-    timeoutMs: 3500
-  })
+	const valid = createValidation(myForm)
+	const form = createEnhancedForm(myForm, {
+		validation: valid,
+		delayMs: 500,
+		timeoutMs: 3500
+	})
 </script>
 
 <p>State: {form.state}</p>
 
-<form {...myForm.preflight(schema).enhance(opts =>
-  form.enhance(opts, {
-    onDelay: () => console.log('showing loader'),
-    onTimeout: () => console.log('request timeout'),
-    onReturn: ({ result }) => console.log('success', result)
-  })
-)}>
-  <input
-    {...myForm.fields.name.as('text')}
-    {...valid.fields('name')}
-    class:error={valid.issues('name')}
-  />
+<form
+	{...myForm.preflight(schema).enhance((opts) =>
+		form.enhance(opts, {
+			onDelay: () => console.log('showing loader'),
+			onTimeout: () => console.log('request timeout'),
+			onReturn: ({ result }) => console.log('success', result)
+		})
+	)}
+>
+	<input
+		{...myForm.fields.name.as('text')}
+		{...valid.fields('name')}
+		class:error={valid.issues('name')}
+	/>
 
-  {#if valid.issues('name')}
-    {#each valid.issues('name') as issue}
-      <p class="error">{issue}</p>
-    {/each}
-  {/if}
+	{#if valid.issues('name')}
+		{#each valid.issues('name') as issue}
+			<p class="error">{issue}</p>
+		{/each}
+	{/if}
 
-  <input
-    {...myForm.fields.address.state.as('text')}
-    {...valid.fields('address.state')}
-    class:error={valid.issues('address.state')}
-  />
+	<input
+		{...myForm.fields.address.state.as('text')}
+		{...valid.fields('address.state')}
+		class:error={valid.issues('address.state')}
+	/>
 
-  <button disabled={form.pending || form.delayed}>
-    {form.delayed ? 'Loading...' : 'Submit'}
-  </button>
+	<button disabled={form.pending || form.delayed}>
+		{form.delayed ? 'Loading...' : 'Submit'}
+	</button>
 </form>
 
 {#if form.timeout}
-  <p>Request timed out</p>
+	<p>Request timed out</p>
 {/if}
 ```

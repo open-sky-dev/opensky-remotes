@@ -1,8 +1,12 @@
-import type { RemoteForm } from '@sveltejs/kit'
+import type { RemoteForm, RemoteFormIssue } from '@sveltejs/kit'
 import { useDebounce } from 'runed'
 
 type ValidationIssues = {
 	[key: string]: string[] | null | ValidationIssues
+}
+
+type FieldWithIssues = {
+	issues: () => RemoteFormIssue[] | undefined
 }
 
 /**
@@ -42,10 +46,17 @@ export function createValidation(form: RemoteForm<any, any>) {
 	 */
 	function getNestedValue(path: string): string[] | null {
 		const keys = path.split('.')
-		const fieldIssues = keys.reduce((current, key) => current?.[key], issues)
+		let current: string[] | null | ValidationIssues | undefined = issues
+		for (const key of keys) {
+			if (current && typeof current === 'object' && !Array.isArray(current)) {
+				current = current[key]
+			} else {
+				current = undefined
+			}
+		}
 
-		if (fieldIssues && Array.isArray(fieldIssues) && fieldIssues.length > 0) {
-			return fieldIssues
+		if (current && Array.isArray(current) && current.length > 0) {
+			return current
 		}
 		return null
 	}
@@ -53,9 +64,18 @@ export function createValidation(form: RemoteForm<any, any>) {
 	/**
 	 * Gets the field object from the form using a dot-notation path
 	 */
-	function getField(path: string) {
+	function getField(path: string): FieldWithIssues {
 		const keys = path.split('.')
 		return keys.reduce((current, key) => current?.[key], form.fields)
+	}
+
+	function issueMessages(field: FieldWithIssues): string[] | null {
+		const messages = field.issues()?.map((issue) => issue.message)
+		return messages && messages.length > 0 ? messages : null
+	}
+
+	function updateFieldIssues(path: string) {
+		setNestedValue(issues, path, issueMessages(getField(path)))
 	}
 
 	/**
@@ -82,9 +102,7 @@ export function createValidation(form: RemoteForm<any, any>) {
 		await form.validate({ includeUntouched: true, preflightOnly: false })
 
 		for (const path of allFieldPaths) {
-			const field = getField(path)
-			const iss = field.issues()?.map((i: any) => i.message) || null
-			setNestedValue(issues, path, iss)
+			updateFieldIssues(path)
 		}
 	}
 
@@ -93,9 +111,7 @@ export function createValidation(form: RemoteForm<any, any>) {
 	 */
 	async function updateIssues() {
 		for (const path of allFieldPaths) {
-			const field = getField(path)
-			const iss = field.issues()?.map((i: any) => i.message) || null
-			setNestedValue(issues, path, iss)
+			updateFieldIssues(path)
 		}
 	}
 
@@ -133,13 +149,13 @@ export function createValidation(form: RemoteForm<any, any>) {
 				// await form.validate()
 				await remoteValidate()
 
-				const iss = field.issues()?.map((i: any) => i.message) || null
+				const iss = issueMessages(field)
 				setNestedValue(issues, path, iss)
 
 				// If preflight didn't find issues, check against server
 				if (!iss) {
 					await form.validate({ includeUntouched: true })
-					const iss = field.issues()?.map((i: any) => i.message) || null
+					const iss = issueMessages(field)
 					setNestedValue(issues, path, iss)
 				}
 			},
@@ -149,12 +165,12 @@ export function createValidation(form: RemoteForm<any, any>) {
 				if (fieldIssues && fieldIssues.length > 0) {
 					await form.validate({ preflightOnly: true })
 
-					let iss = field.issues()?.map((i: any) => i.message) || null
+					let iss = issueMessages(field)
 
 					if (iss) {
 						// await form.validate()
 						await remoteValidate()
-						iss = field.issues()?.map((i: any) => i.message) || null
+						iss = issueMessages(field)
 					}
 
 					setNestedValue(issues, path, iss)

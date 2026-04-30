@@ -1,4 +1,5 @@
 import type { RemoteForm, RemoteFormInput, RemoteFormIssue } from '@sveltejs/kit'
+import { untrack } from 'svelte'
 
 export type ValidationIssues = {
 	[key: string]: string[] | null | ValidationIssues
@@ -16,6 +17,9 @@ type FieldWithIssues = {
 type ValidationWaiter = {
 	resolve: () => void
 	reject: (error: unknown) => void
+	isCurrent: () => boolean
+	onStart: () => void
+	onEnd: () => void
 }
 
 type PrimitiveField = string | string[] | number | boolean | File | File[]
@@ -29,7 +33,9 @@ type FieldValue<T, K extends PropertyKey> = T extends unknown
 export type ValidationField = {
 	handlers: ValidationHandlers
 	issues: string[] | null
+	pending: boolean
 	addIssues: (issues: string | string[]) => void
+	removeIssue: (issue: string) => void
 	clearIssues: () => void
 }
 
@@ -62,7 +68,13 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 	form: RemoteForm<TInput, TOutput>
 ) {
 	let issues = $state<ValidationIssues>({})
-	const allFieldPaths: string[] = []
+	let validationIssues = $state<ValidationIssues>({})
+	let customIssues = $state<ValidationIssues>({})
+	const pendingFields = $state<Record<string, number>>({})
+	const fieldVersions: Record<string, number> = {}
+	// This is internal bookkeeping, not reactive UI state.
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity
+	const allFieldPaths = new Set<string>()
 
 	/**
 	 * Sets a nested value in the issues object using a field path
@@ -90,9 +102,9 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 	/**
 	 * Gets a nested value from the issues object using a field path
 	 */
-	function getNestedValue(path: string[]): string[] | null {
+	function getNestedValue(path: string[], obj = issues): string[] | null {
 		const keys = [...path]
-		let current: string[] | null | ValidationIssues | undefined = issues
+		let current: string[] | null | ValidationIssues | undefined = obj
 		for (const key of keys) {
 			if (current && typeof current === 'object' && !Array.isArray(current)) {
 				current = current[key]
@@ -137,18 +149,95 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 		return messages && messages.length > 0 ? messages : null
 	}
 
+	function mergeIssues(
+		validationIssues: string[] | null | undefined,
+		additionalIssues: string[] | null | undefined
+	): string[] | null {
+		const nextIssues = [...(validationIssues ?? [])]
+
+		for (const issue of additionalIssues ?? []) {
+			if (!nextIssues.includes(issue)) {
+				nextIssues.push(issue)
+			}
+		}
+
+		return nextIssues.length > 0 ? nextIssues : null
+	}
+
+	function customIssuesFor(path: string[]) {
+		return untrack(() => getNestedValue(path, customIssues))
+	}
+
+	function validationIssuesFor(path: string[]) {
+		return untrack(() => getNestedValue(path, validationIssues))
+	}
+
+	function setFieldIssues(path: string[], nextValidationIssues: string[] | null) {
+		setNestedValue(validationIssues, path, nextValidationIssues)
+		setNestedValue(issues, path, mergeIssues(nextValidationIssues, customIssuesFor(path)))
+	}
+
 	function updateFieldIssues(path: string[]) {
-		setNestedValue(issues, path, issueMessages(getField(path)))
+		setFieldIssues(path, issueMessages(getField(path)))
+	}
+
+	function fieldKey(path: string[]) {
+		return path.join('.')
+	}
+
+	function beginFieldValidation(path: string[]) {
+		const key = fieldKey(path)
+		const version = (fieldVersions[key] ?? 0) + 1
+		fieldVersions[key] = version
+		let started = false
+
+		return {
+			isCurrent: () => fieldVersions[key] === version,
+			start: () => {
+				if (fieldVersions[key] !== version) {
+					return
+				}
+
+				started = true
+				pendingFields[key] = (pendingFields[key] ?? 0) + 1
+			},
+			end: () => {
+				if (!started) {
+					return
+				}
+
+				started = false
+				pendingFields[key] = Math.max((pendingFields[key] ?? 1) - 1, 0)
+			}
+		}
+	}
+
+	async function withPending(
+		token: ReturnType<typeof beginFieldValidation>,
+		task: () => Promise<void>
+	) {
+		if (!token.isCurrent()) {
+			return
+		}
+
+		token.start()
+
+		try {
+			await task()
+		} finally {
+			token.end()
+		}
+	}
+
+	function isPending(path: string[]) {
+		return (pendingFields[fieldKey(path)] ?? 0) > 0
 	}
 
 	/**
 	 * Registers a field path for validation tracking
 	 */
 	function registerPath(path: string[]) {
-		const fieldPath = path.join('.')
-		if (!allFieldPaths.includes(fieldPath)) {
-			allFieldPaths.push(fieldPath)
-		}
+		allFieldPaths.add(fieldKey(path))
 	}
 
 	/**
@@ -157,13 +246,19 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 	let remoteValidationTimer: ReturnType<typeof setTimeout> | null = null
 	let remoteValidationWaiters: ValidationWaiter[] = []
 
-	function remoteValidate() {
+	function remoteValidate(token: ReturnType<typeof beginFieldValidation>) {
 		if (remoteValidationTimer) {
 			clearTimeout(remoteValidationTimer)
 		}
 
 		const validation = new Promise<void>((resolve, reject) => {
-			remoteValidationWaiters.push({ resolve, reject })
+			remoteValidationWaiters.push({
+				resolve,
+				reject,
+				isCurrent: token.isCurrent,
+				onStart: token.start,
+				onEnd: token.end
+			})
 		})
 
 		remoteValidationTimer = setTimeout(async () => {
@@ -171,12 +266,21 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 
 			const waiters = remoteValidationWaiters
 			remoteValidationWaiters = []
+			const currentWaiters = waiters.filter(({ isCurrent }) => isCurrent())
+
+			if (currentWaiters.length === 0) {
+				waiters.forEach(({ resolve }) => resolve())
+				return
+			}
 
 			try {
+				currentWaiters.forEach(({ onStart }) => onStart())
 				await form.validate()
 				waiters.forEach(({ resolve }) => resolve())
 			} catch (error) {
 				waiters.forEach(({ reject }) => reject(error))
+			} finally {
+				currentWaiters.forEach(({ onEnd }) => onEnd())
 			}
 		}, 280)
 
@@ -208,6 +312,8 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 	 */
 	function clearAllIssues() {
 		issues = {}
+		validationIssues = {}
+		customIssues = {}
 	}
 
 	/**
@@ -216,12 +322,40 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 	 * @param issue - The validation error message to add
 	 */
 	function addIssues(path: string[], issuesToAdd: string | string[]) {
-		const existingIssues = getNestedValue(path)
+		const existingIssues = customIssuesFor(path)
 		const newIssues = Array.isArray(issuesToAdd) ? issuesToAdd : [issuesToAdd]
-		setNestedValue(issues, path, existingIssues ? [...existingIssues, ...newIssues] : newIssues)
+		const nextIssues = [...(existingIssues ?? [])]
+
+		for (const issue of newIssues) {
+			if (!nextIssues.includes(issue)) {
+				nextIssues.push(issue)
+			}
+		}
+
+		if (existingIssues && existingIssues.length === nextIssues.length) {
+			return
+		}
+
+		setNestedValue(customIssues, path, nextIssues)
+		setNestedValue(issues, path, mergeIssues(validationIssuesFor(path), nextIssues))
+	}
+
+	function removeIssue(path: string[], issueToRemove: string) {
+		const existingIssues = customIssuesFor(path)
+
+		if (!existingIssues?.includes(issueToRemove)) {
+			return
+		}
+
+		const remainingIssues = existingIssues?.filter((issue) => issue !== issueToRemove)
+		const nextCustomIssues = remainingIssues && remainingIssues.length > 0 ? remainingIssues : null
+		setNestedValue(customIssues, path, nextCustomIssues)
+		setNestedValue(issues, path, mergeIssues(validationIssuesFor(path), nextCustomIssues))
 	}
 
 	function clearIssues(path: string[]) {
+		setNestedValue(customIssues, path, null)
+		setNestedValue(validationIssues, path, null)
 		setNestedValue(issues, path, null)
 	}
 
@@ -235,34 +369,56 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 
 		return {
 			onblur: async () => {
+				const token = beginFieldValidation(path)
+
 				// await form.validate()
-				await remoteValidate()
+				await remoteValidate(token)
+
+				if (!token.isCurrent()) {
+					return
+				}
 
 				const iss = issueMessages(field)
-				setNestedValue(issues, path, iss)
+				setFieldIssues(path, iss)
 
 				// If preflight didn't find issues, check against server
 				if (!iss) {
-					await form.validate({ includeUntouched: true })
+					await withPending(token, () => form.validate({ includeUntouched: true }))
+
+					if (!token.isCurrent()) {
+						return
+					}
+
 					const iss = issueMessages(field)
-					setNestedValue(issues, path, iss)
+					setFieldIssues(path, iss)
 				}
 			},
 			oninput: async () => {
 				const fieldIssues = getNestedValue(path)
 
 				if (fieldIssues && fieldIssues.length > 0) {
-					await form.validate({ preflightOnly: true })
+					const token = beginFieldValidation(path)
+
+					await withPending(token, () => form.validate({ preflightOnly: true }))
+
+					if (!token.isCurrent()) {
+						return
+					}
 
 					let iss = issueMessages(field)
 
 					if (iss) {
 						// await form.validate()
-						await remoteValidate()
+						await remoteValidate(token)
+
+						if (!token.isCurrent()) {
+							return
+						}
+
 						iss = issueMessages(field)
 					}
 
-					setNestedValue(issues, path, iss)
+					setFieldIssues(path, iss)
 				}
 			}
 		}
@@ -286,8 +442,17 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 						return getNestedValue(path)
 					}
 
+					if (property === 'pending') {
+						registerPath(path)
+						return isPending(path)
+					}
+
 					if (property === 'addIssues') {
 						return (issues: string | string[]) => addIssues(path, issues)
+					}
+
+					if (property === 'removeIssue') {
+						return (issue: string) => removeIssue(path, issue)
 					}
 
 					if (property === 'clearIssues') {

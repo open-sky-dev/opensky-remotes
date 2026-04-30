@@ -21,7 +21,9 @@ Returns an object with:
 - `fields` - Type-safe validation field helpers that mirror the remote form's field shape
 - `fields.some.path.handlers` - Returns `onblur` and `oninput` handlers for a field
 - `fields.some.path.issues` - Returns validation issues for a field
-- `fields.some.path.addIssues(issues: string | string[])` - Adds one or more custom validation errors to a field
+- `fields.some.path.pending` - Returns whether validation is currently running for a field
+- `fields.some.path.addIssues(issues: string | string[])` - Adds one or more custom validation errors to a field, ignoring duplicate messages
+- `fields.some.path.removeIssue(issue: string)` - Removes a custom validation error from a field by message
 - `fields.some.path.clearIssues()` - Clears validation issues for a field
 - `allIssues` - Returns all validation issues
 - `clearAllIssues()` - Clears all validation issues
@@ -43,6 +45,10 @@ Then use `.fields.some.path.issues` to get issues by field path the same way. Th
 	{#each valid.fields.address.state.issues as issue}
 		<p>{issue}</p>
 	{/each}
+{/if}
+
+{#if valid.fields.address.state.pending}
+	<p>Checking...</p>
 {/if}
 ```
 

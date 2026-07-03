@@ -4,7 +4,7 @@ Provides two helpers `createValidation` and `createEnhancedForm` that improve th
 
 ## createValidation
 
-Use this to achieve better user experience around validation issues. The logic for showing issues on fields is: issues only appear when you leave a field (`onblur` events) but they are cleared on input. This way you don't see issues appear as you type, but if the field shows an issue, as you type, the issue will go away as soon as you modify it to be valid.
+Use this to achieve better user experience around validation issues. Fields become dirty when the user changes their value. Issues appear when a dirty field loses focus (`onblur` events), and existing issues are cleared on input when the new value is valid. This way focus alone does not show validation issues, and you don't see new issues appear as you type.
 
 This follows the same validation as superforms did and is inspired by several articles. **(todo: links)**
 
@@ -18,6 +18,7 @@ const valid = createValidation(remoteForm)
 
 Returns an object with:
 
+- `formHandler` - Form-level submit attempt handler that validates all registered fields before SvelteKit blocks invalid submissions
 - `fields` - Type-safe validation field helpers that mirror the remote form's field shape
 - `fields.some.path.handlers` - Returns `onblur` and `oninput` handlers for a field
 - `fields.some.path.issues` - Returns validation issues for a field
@@ -25,31 +26,54 @@ Returns an object with:
 - `fields.some.path.addIssues(issues: string | string[])` - Adds one or more custom validation errors to a field, ignoring duplicate messages
 - `fields.some.path.removeIssue(issue: string)` - Removes a custom validation error from a field by message
 - `fields.some.path.clearIssues()` - Clears validation issues for a field
+- `fields.some.path.addValidator(validator)` - Adds a field validator and returns a cleanup function
 - `allIssues` - Returns all validation issues
 - `clearAllIssues()` - Clears all validation issues
 - `validateAll()` - Validates all registered fields (with server)
 - `updateIssues()` - Updates issues for all registered fields (populates from issues)
+
+Spread `.formHandler` onto the form to show all registered field issues when the user attempts to submit, even if SvelteKit preflight validation blocks the remote submission before the enhance callback runs.
 
 Use `.fields.some.path.handlers` to add the fields you want validated. The validation field shape mirrors the remote form field shape, so TypeScript can catch renamed or misspelled fields.
 
 Then use `.fields.some.path.issues` to get issues by field path the same way. This returns an array of strings or null. So you can easily use it as a check for styling like `class:border-red-500={valid.fields.address.state.issues}`
 
 ```svelte
-<input
-	{...remoteForm.fields.address.state.as('text')}
-	{...valid.fields.address.state.handlers}
-	class:border-red-500={valid.fields.address.state.issues}
-/>
+<form {...valid.formHandler} {...remoteForm.preflight(schema).enhance(callback)}>
+	<input
+		{...remoteForm.fields.address.state.as('text')}
+		{...valid.fields.address.state.handlers}
+		class:border-red-500={valid.fields.address.state.issues}
+	/>
 
-{#if valid.fields.address.state.issues}
-	{#each valid.fields.address.state.issues as issue}
-		<p>{issue}</p>
-	{/each}
-{/if}
+	{#if valid.fields.address.state.issues}
+		{#each valid.fields.address.state.issues as issue}
+			<p>{issue}</p>
+		{/each}
+	{/if}
 
-{#if valid.fields.address.state.pending}
-	<p>Checking...</p>
-{/if}
+	{#if valid.fields.address.state.pending}
+		<p>Checking...</p>
+	{/if}
+</form>
+```
+
+Add custom field validators directly to the field. A validator owns its own issue result: if it returns an issue, that issue is shown; if it later returns nothing, its previous issue is cleared.
+
+```ts
+const removeValidator = valid.fields.address.state.addValidator(({ value, issue }) => {
+	if (!acceptedStates.includes(value)) {
+		return issue('Your state is not accepted at this time')
+	}
+})
+
+valid.fields.email.addValidator(async ({ value, issue }) => {
+	const available = await checkEmailAvailability(value)
+
+	if (!available) {
+		return issue('That email is already in use')
+	}
+})
 ```
 
 #### Details
@@ -169,6 +193,7 @@ Example of usage of both createValidation and createEnhancedForm
 <p>State: {form.state}</p>
 
 <form
+	{...valid.formHandler}
 	{...myForm.preflight(schema).enhance((opts) =>
 		form.enhance(opts, {
 			onDelay: () => console.log('showing loader'),

@@ -4,7 +4,7 @@ Provides two helpers `createValidation` and `createEnhancedForm` that improve th
 
 ## createValidation
 
-Use this to achieve better user experience around validation issues. The logic for showing issues on fields is: issues only appear when you leave a field (`onblur` events) but they are cleared on input. This way you don't see issues appear as you type, but if the field shows an issue, as you type, the issue will go away as soon as you modify it to be valid.
+Use this to achieve better user experience around validation issues. Fields become dirty when the user changes their value. Issues appear when a dirty field loses focus (`onblur` events), and existing issues are cleared on input when the new value is valid. This way focus alone does not show validation issues, and you don't see new issues appear as you type.
 
 This follows the same validation as superforms did and is inspired by several articles. **(todo: links)**
 
@@ -18,6 +18,7 @@ const valid = createValidation(remoteForm)
 
 Returns an object with:
 
+- `formHandler` - Form-level submit attempt handler that validates all registered fields before SvelteKit blocks invalid submissions
 - `fields(path: string)` - Returns `onblur` and `oninput` handlers for a field path
 - `issues(path: string)` - Returns validation issues for a field path
 - `allIssues()` - Returns all validation issues
@@ -26,22 +27,26 @@ Returns an object with:
 - `validateAll()` - Validates all registered fields (with server)
 - `updateIssues()` - Updates issues for all registered fields (populates from issues)
 
+Spread `.formHandler` onto the form to show all registered field issues when the user attempts to submit, even if SvelteKit preflight validation blocks the remote submission before the enhance callback runs.
+
 Use `.fields()` to add the fields you want validated. Use string access like `'address.state'` to reference the fields.
 
 Then use `.issues()` to get issues by field path the same way. This returns an array of strings or null. So you can easily use it as a check for styling like `class:border-red-500={valid.issues('address.state')}`
 
 ```svelte
-<input 
-  {...remoteForm.fields.address.state.as('text')} 
-  {...valid.fields('address.state')}
-  class:border-red-500={valid.issues('address.state')} 
-/>
+<form {...valid.formHandler} {...remoteForm.preflight(schema).enhance(callback)}>
+  <input 
+    {...remoteForm.fields.address.state.as('text')} 
+    {...valid.fields('address.state')}
+    class:border-red-500={valid.issues('address.state')} 
+  />
 
-{#if valid.issues('address.state')}
-  {#each valid.issues('address.state') as issue}
-    <p>{issue}</p>
-  {/each}
-{/if}
+  {#if valid.issues('address.state')}
+    {#each valid.issues('address.state') as issue}
+      <p>{issue}</p>
+    {/each}
+  {/if}
+</form>
 ```
 
 #### Details

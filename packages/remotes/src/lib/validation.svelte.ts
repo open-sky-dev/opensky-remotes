@@ -10,8 +10,13 @@ type ValidationHandlers = {
 	oninput: () => Promise<void>
 }
 
+type ValidationFormHandler = {
+	onsubmitcapture: () => Promise<void>
+}
+
 type FieldWithIssues = {
 	issues: () => RemoteFormIssue[] | undefined
+	value: () => unknown
 }
 
 type ValidationWaiter = {
@@ -23,6 +28,16 @@ type ValidationWaiter = {
 }
 
 type PrimitiveField = string | string[] | number | boolean | File | File[]
+type ValidatorResult = string | string[] | null | undefined | void
+
+type FieldValidatorContext<TValue> = {
+	value: TValue
+	issue: (issues: string | string[]) => string[]
+}
+
+export type FieldValidator<TValue = unknown> = (
+	context: FieldValidatorContext<TValue>
+) => ValidatorResult | Promise<ValidatorResult>
 
 type FieldValue<T, K extends PropertyKey> = T extends unknown
 	? K extends keyof T
@@ -30,28 +45,30 @@ type FieldValue<T, K extends PropertyKey> = T extends unknown
 		: never
 	: never
 
-export type ValidationField = {
+export type ValidationField<TValue = unknown> = {
 	handlers: ValidationHandlers
 	issues: string[] | null
 	pending: boolean
 	addIssues: (issues: string | string[]) => void
 	removeIssue: (issue: string) => void
 	clearIssues: () => void
+	addValidator: (validator: FieldValidator<TValue>) => () => void
 }
 
 export type ValidationFields<T> = [T] extends [void]
 	? ValidationField
 	: NonNullable<T> extends PrimitiveField
-		? ValidationField
+		? ValidationField<NonNullable<T>>
 		: [NonNullable<T>] extends [Array<infer Item>]
-			? ValidationField & {
+			? ValidationField<NonNullable<T>> & {
 					[index: number]: ValidationFields<Item>
 				}
-			: ValidationField & {
+			: ValidationField<NonNullable<T>> & {
 					[K in keyof NonNullable<T>]-?: ValidationFields<FieldValue<NonNullable<T>, K>>
 				}
 
 export type Validation<TInput extends RemoteFormInput | void = RemoteFormInput> = {
+	formHandler: ValidationFormHandler
 	fields: ValidationFields<TInput>
 	allIssues: ValidationIssues
 	clearAllIssues: () => void
@@ -70,11 +87,20 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 	let issues = $state<ValidationIssues>({})
 	let validationIssues = $state<ValidationIssues>({})
 	let customIssues = $state<ValidationIssues>({})
+	const validatorIssues = $state<Record<string, Record<number, string[] | null>>>({})
 	const pendingFields = $state<Record<string, number>>({})
 	const fieldVersions: Record<string, number> = {}
+	const fieldValidators: Record<
+		string,
+		Array<{ id: number; validator: FieldValidator<unknown> }>
+	> = {}
+	let nextValidatorId = 0
 	// This is internal bookkeeping, not reactive UI state.
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity
 	const allFieldPaths = new Set<string>()
+	// Fields become dirty from user input, not focus/blur alone.
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity
+	const dirtyFieldPaths = new Set<string>()
 
 	/**
 	 * Sets a nested value in the issues object using a field path
@@ -149,15 +175,14 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 		return messages && messages.length > 0 ? messages : null
 	}
 
-	function mergeIssues(
-		validationIssues: string[] | null | undefined,
-		additionalIssues: string[] | null | undefined
-	): string[] | null {
-		const nextIssues = [...(validationIssues ?? [])]
+	function mergeIssues(...issueLists: Array<string[] | null | undefined>): string[] | null {
+		const nextIssues: string[] = []
 
-		for (const issue of additionalIssues ?? []) {
-			if (!nextIssues.includes(issue)) {
-				nextIssues.push(issue)
+		for (const issues of issueLists) {
+			for (const issue of issues ?? []) {
+				if (!nextIssues.includes(issue)) {
+					nextIssues.push(issue)
+				}
 			}
 		}
 
@@ -172,13 +197,26 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 		return untrack(() => getNestedValue(path, validationIssues))
 	}
 
+	function validatorIssuesFor(path: string[]) {
+		const issuesByValidator = validatorIssues[fieldKey(path)]
+		return mergeIssues(...Object.values(issuesByValidator ?? {}))
+	}
+
+	function combinedIssuesFor(path: string[]) {
+		return mergeIssues(validationIssuesFor(path), customIssuesFor(path), validatorIssuesFor(path))
+	}
+
 	function setFieldIssues(path: string[], nextValidationIssues: string[] | null) {
 		setNestedValue(validationIssues, path, nextValidationIssues)
-		setNestedValue(issues, path, mergeIssues(nextValidationIssues, customIssuesFor(path)))
+		setNestedValue(issues, path, combinedIssuesFor(path))
 	}
 
 	function updateFieldIssues(path: string[]) {
 		setFieldIssues(path, issueMessages(getField(path)))
+	}
+
+	function fieldValue(path: string[]) {
+		return getField(path)?.value()
 	}
 
 	function fieldKey(path: string[]) {
@@ -214,7 +252,7 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 
 	async function withPending(
 		token: ReturnType<typeof beginFieldValidation>,
-		task: () => Promise<void>
+		task: () => Promise<void> | void
 	) {
 		if (!token.isCurrent()) {
 			return
@@ -233,11 +271,79 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 		return (pendingFields[fieldKey(path)] ?? 0) > 0
 	}
 
+	function normalizeValidatorResult(result: ValidatorResult): string[] | null {
+		if (!result) {
+			return null
+		}
+
+		return Array.isArray(result) ? result : [result]
+	}
+
+	function issue(issues: string | string[]) {
+		return Array.isArray(issues) ? issues : [issues]
+	}
+
+	function setValidatorIssues(path: string[], id: number, nextIssues: string[] | null) {
+		const key = fieldKey(path)
+		validatorIssues[key] ??= {}
+		validatorIssues[key][id] = nextIssues
+		setNestedValue(issues, path, combinedIssuesFor(path))
+	}
+
+	async function runFieldValidators(
+		path: string[],
+		token: ReturnType<typeof beginFieldValidation>,
+		options: { allowNewIssues: boolean }
+	) {
+		const validators = fieldValidators[fieldKey(path)] ?? []
+
+		if (validators.length === 0) {
+			return
+		}
+
+		await withPending(token, async () => {
+			for (const { id, validator } of validators) {
+				const result = await validator({ value: fieldValue(path), issue })
+
+				if (!token.isCurrent()) {
+					return
+				}
+
+				const nextIssues = normalizeValidatorResult(result)
+				if (!nextIssues || options.allowNewIssues) {
+					setValidatorIssues(path, id, nextIssues)
+				}
+			}
+		})
+	}
+
+	function addValidator<TValue>(path: string[], validator: FieldValidator<TValue>) {
+		registerPath(path)
+
+		const key = fieldKey(path)
+		const id = nextValidatorId++
+		fieldValidators[key] ??= []
+		fieldValidators[key].push({ id, validator: validator as FieldValidator<unknown> })
+
+		return () => {
+			fieldValidators[key] = (fieldValidators[key] ?? []).filter((entry) => entry.id !== id)
+			setValidatorIssues(path, id, null)
+		}
+	}
+
 	/**
 	 * Registers a field path for validation tracking
 	 */
 	function registerPath(path: string[]) {
 		allFieldPaths.add(fieldKey(path))
+	}
+
+	function markDirty(path: string[]) {
+		dirtyFieldPaths.add(fieldKey(path))
+	}
+
+	function isDirty(path: string[]) {
+		return dirtyFieldPaths.has(fieldKey(path))
 	}
 
 	/**
@@ -294,7 +400,10 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 		await form.validate({ includeUntouched: true, preflightOnly: false })
 
 		for (const path of allFieldPaths) {
-			updateFieldIssues(path.split('.'))
+			const fieldPath = path.split('.')
+			const token = beginFieldValidation(fieldPath)
+			updateFieldIssues(fieldPath)
+			await runFieldValidators(fieldPath, token, { allowNewIssues: true })
 		}
 	}
 
@@ -303,7 +412,10 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 	 */
 	async function updateIssues() {
 		for (const path of allFieldPaths) {
-			updateFieldIssues(path.split('.'))
+			const fieldPath = path.split('.')
+			const token = beginFieldValidation(fieldPath)
+			updateFieldIssues(fieldPath)
+			await runFieldValidators(fieldPath, token, { allowNewIssues: true })
 		}
 	}
 
@@ -314,6 +426,10 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 		issues = {}
 		validationIssues = {}
 		customIssues = {}
+		for (const key of Object.keys(validatorIssues)) {
+			delete validatorIssues[key]
+		}
+		dirtyFieldPaths.clear()
 	}
 
 	/**
@@ -337,7 +453,7 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 		}
 
 		setNestedValue(customIssues, path, nextIssues)
-		setNestedValue(issues, path, mergeIssues(validationIssuesFor(path), nextIssues))
+		setNestedValue(issues, path, combinedIssuesFor(path))
 	}
 
 	function removeIssue(path: string[], issueToRemove: string) {
@@ -350,12 +466,13 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 		const remainingIssues = existingIssues?.filter((issue) => issue !== issueToRemove)
 		const nextCustomIssues = remainingIssues && remainingIssues.length > 0 ? remainingIssues : null
 		setNestedValue(customIssues, path, nextCustomIssues)
-		setNestedValue(issues, path, mergeIssues(validationIssuesFor(path), nextCustomIssues))
+		setNestedValue(issues, path, combinedIssuesFor(path))
 	}
 
 	function clearIssues(path: string[]) {
 		setNestedValue(customIssues, path, null)
 		setNestedValue(validationIssues, path, null)
+		delete validatorIssues[fieldKey(path)]
 		setNestedValue(issues, path, null)
 	}
 
@@ -369,6 +486,10 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 
 		return {
 			onblur: async () => {
+				if (!isDirty(path)) {
+					return
+				}
+
 				const token = beginFieldValidation(path)
 
 				// await form.validate()
@@ -392,8 +513,11 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 					const iss = issueMessages(field)
 					setFieldIssues(path, iss)
 				}
+
+				await runFieldValidators(path, token, { allowNewIssues: true })
 			},
 			oninput: async () => {
+				markDirty(path)
 				const fieldIssues = getNestedValue(path)
 
 				if (fieldIssues && fieldIssues.length > 0) {
@@ -419,6 +543,7 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 					}
 
 					setFieldIssues(path, iss)
+					await runFieldValidators(path, token, { allowNewIssues: false })
 				}
 			}
 		}
@@ -459,6 +584,10 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 						return () => clearIssues(path)
 					}
 
+					if (property === 'addValidator') {
+						return (validator: FieldValidator<unknown>) => addValidator(path, validator)
+					}
+
 					return createFieldProxy([...path, property])
 				}
 			}
@@ -466,8 +595,12 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 	}
 
 	const fields = createFieldProxy([]) as ValidationFields<TInput>
+	const formHandler: ValidationFormHandler = {
+		onsubmitcapture: validateAll
+	}
 
 	return {
+		formHandler,
 		fields,
 		get allIssues() {
 			return issues

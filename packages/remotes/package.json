@@ -59,6 +59,7 @@
 	"types": "./dist/index.d.ts",
 	"scripts": {
 		"build": "svelte-kit sync && svelte-package && publint",
+		"dev": "bun run build && bun link",
 		"check": "svelte-kit sync && tsc --noEmit --project ./tsconfig.json",
 		"format": "prettier --write .",
 		"lint": "prettier --check . && eslint .",

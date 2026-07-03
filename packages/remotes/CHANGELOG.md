@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added `formHandler` to validation instances for showing all registered issues on submit attempts, including submissions blocked by SvelteKit preflight validation.
 - Added `reset()` method to enhanced form instances for manually resetting state back to 'idle'.
 - Added `cancel()` and `updates()` functions to `onSubmit` callback for client-side validation and optimistic updates.
 - Added `addIssue()` method to validation instances for adding custom validation errors.

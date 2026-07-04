@@ -1,26 +1,21 @@
 # Changelog
 
-## [0.0.3]
+## [0.1.0]
 
 ### Added
 
-- Added `formHandler` to validation instances for showing all registered issues on submit attempts, including submissions blocked by SvelteKit preflight validation.
-- Added `formIssues` to validation instances — form-level issues without a field path, e.g. from `invalid('message')` on the server. These are mirrored on every issue update, no registration needed.
+- Added `formHandler` to validation instances. Spread it onto the form to show all registered field issues on submit attempts, including submissions blocked by SvelteKit preflight validation (which never reach the enhance callback). It runs preflight-only validation — SvelteKit blocks on preflight failure alone, so no server request is needed — and also clears validation state (issues and dirty tracking) when the form resets, matching SvelteKit's clearing of its own issues and touched state.
+- Added `fields.some.path.addValidator(validator)` — per-field custom validators, sync or async, receiving `{ value, issue }`. Each validator owns its own issue result: returning an issue shows it, returning nothing clears it, without affecting other layers. Returns a cleanup function.
+- Added `fields.some.path.pending` for tracking in-flight validation per field.
+- Added `formIssues` to validation instances — form-level issues without a field path, e.g. from `invalid('message')` on the server.
 - Added `allKnownIssues` to validation instances — a debugging view of every issue currently known, whether displayed or not: everything the form holds right now (including unregistered and untouched fields) merged with custom and validator issues. `allIssues` remains the currently displayed issues only.
-- `formHandler` now also clears validation state (issues and dirty tracking) when the form resets, matching SvelteKit's clearing of its own issues and touched state on reset. This covers the automatic reset after successful submissions as well as manual resets.
-- `clearAllIssues()` now invalidates in-flight validations so a slow validation or async validator can no longer write stale issues back after a clear.
-- Removing a field validator while it is running no longer lets it write an orphaned issue that nothing owns.
-- Added `reset()` method to enhanced form instances for manually resetting state back to 'idle'.
-- Added `cancel()` and `updates()` functions to `onSubmit` callback for client-side validation and optimistic updates.
-- Added `addIssue()` method to validation instances for adding custom validation errors.
 
 ### Changed
 
+- **BREAKING**: `createValidation` fields are now a type-safe proxy mirroring the remote form's field shape. Use `valid.fields.address.state.handlers` and `valid.fields.address.state.issues` in place of `valid.fields('address.state')` and `valid.issues('address.state')`. `addIssue(path, issue)` is replaced by `fields.some.path.addIssues(issues)` (plus `removeIssue` and `clearIssues`), and `reset()` is now `clearAllIssues()`.
 - **BREAKING**: Updated to SvelteKit's current remote form `enhance` API and raised the peer dependency to `@sveltejs/kit >= 2.68`. Enhance callbacks now receive the remote form instance as `form` (with `element`, `fields`, `submit()`, `result`) instead of `{ form: HTMLFormElement, data, remote }`. Use `form.element` for the form element and `form.fields.value()` for the data being submitted.
+- Issues now only appear for fields the user has actually edited — focusing and leaving a field no longer triggers validation display (dirty tracking).
 - The callbacks argument of `enhance` is now optional, so an enhanced form can be used purely for state tracking.
-- **BREAKING**: Renamed `success` state to `result` throughout the enhanced form lifecycle for better semantic clarity.
-- **BREAKING**: Renamed `validator` option to `validation` in `createEnhancedForm` for consistency with `createValidation`.
-- **BREAKING**: Moved `delayMs` and `timeoutMs` from enhance callback options to `createEnhancedForm` creation options. This enables type-safe conditional states where `delayed` and `timeout` state accessors are only available when their corresponding timing options are provided. Callbacks (`onDelay`, `onTimeout`) are now optional but can only be used when the corresponding timing option is set at creation.
 
 ### Changed (internal)
 
@@ -28,14 +23,26 @@
 
 ### Fixed
 
-- `clearIssues()` on a parent path now clears validator issues of nested fields too (previously only the tree-stored layers were cleared for the subtree).
-- `allIssues` no longer retains `null` entries for fields whose issues were cleared — cleared fields simply disappear from the tree.
-- Removed a redundant second server validation round-trip on blur — `form.validate()` already checks the server when preflight passes, halving validation traffic on clean blurs.
-- `formHandler` now runs preflight-only validation on submit attempts instead of a full server round-trip. SvelteKit blocks submissions on preflight failure alone, so this covers every blocking case with zero network; server-side issues still arrive with the submission response.
-- Validation event handlers (`onblur`, `oninput`, `formHandler`) and the enhanced form's validation integration no longer surface unhandled promise rejections when a validation request fails — the currently displayed issues are kept instead. This also prevents SvelteKit from navigating to the nearest error page when a validation refresh fails inside the enhance callback.
-- `validateAll()` and `updateIssues()` now refresh fields in parallel instead of sequentially, so total latency is the slowest field's validators rather than the sum of all of them (validator order within a field is preserved).
-- Field validators now receive `value` typed as possibly `undefined`, matching the runtime behavior for empty or untouched fields.
 - Fixed a crash after successful submissions on SvelteKit 2.61+ ("The `form` property has been removed from the `enhance` callback argument") that left the enhanced form stuck in the 'error' state. The post-submit form reset now uses the instance's `element` and mirrors SvelteKit's default enhance behavior (waits a tick, then resets via the prototype).
+- Removed a redundant second server validation round-trip on blur — `form.validate()` already checks the server when preflight passes, halving validation traffic on clean blurs.
+- Validation event handlers and the enhanced form's validation integration no longer surface unhandled promise rejections when a validation request fails — the currently displayed issues are kept instead. This also prevents SvelteKit from navigating to the nearest error page when a validation refresh fails inside the enhance callback.
+- Clearing all issues now invalidates in-flight validations, so a slow validation can no longer write stale issues back after a clear.
+- `validateAll()` and `updateIssues()` now refresh fields in parallel instead of sequentially, so total latency is the slowest field's validators rather than the sum of all of them (validator order within a field is preserved).
+- `allIssues` no longer retains `null` entries for fields whose issues were cleared — cleared fields simply disappear from the tree.
+
+## [0.0.3]
+
+### Added
+
+- Added `reset()` method to enhanced form instances for manually resetting state back to 'idle'.
+- Added `cancel()` and `updates()` functions to `onSubmit` callback for client-side validation and optimistic updates.
+- Added `addIssue()` method to validation instances for adding custom validation errors.
+
+### Changed
+
+- **BREAKING**: Renamed `success` state to `result` throughout the enhanced form lifecycle for better semantic clarity.
+- **BREAKING**: Renamed `validator` option to `validation` in `createEnhancedForm` for consistency with `createValidation`.
+- **BREAKING**: Moved `delayMs` and `timeoutMs` from enhance callback options to `createEnhancedForm` creation options. This enables type-safe conditional states where `delayed` and `timeout` state accessors are only available when their corresponding timing options are provided. Callbacks (`onDelay`, `onTimeout`) are now optional but can only be used when the corresponding timing option is set at creation.
 
 ## [0.0.2]
 

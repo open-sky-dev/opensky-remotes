@@ -2,7 +2,7 @@
 	"author": "notnotjake",
 	"name": "@opensky/remotes",
 	"description": "SvelteKit remotes helper utilities",
-	"version": "0.0.3",
+	"version": "0.1.0",
 	"repository": {
 		"directory": "packages/remotes",
 		"type": "git",

@@ -2,6 +2,8 @@
 
 Provides two helpers `createValidation` and `createEnhancedForm` that improve the behaviors and experience working with [remote form functions](https://svelte.dev/docs/kit/remote-functions#form).
 
+Requires `@sveltejs/kit` 2.68.0 or newer (targets the current remote form `enhance` instance API).
+
 ## createValidation
 
 Use this to achieve better user experience around validation issues. Fields become dirty when the user changes their value. Issues appear when a dirty field loses focus (`onblur` events), and existing issues are cleared on input when the new value is valid. This way focus alone does not show validation issues, and you don't see new issues appear as you type.
@@ -18,21 +20,25 @@ const valid = createValidation(remoteForm)
 
 Returns an object with:
 
-- `formHandler` - Form-level submit attempt handler that validates all registered fields before SvelteKit blocks invalid submissions
+- `formHandler` - Form-level submit attempt handler that shows preflight issues for all registered fields, even when SvelteKit blocks invalid submissions
 - `fields` - Type-safe validation field helpers that mirror the remote form's field shape
 - `fields.some.path.handlers` - Returns `onblur` and `oninput` handlers for a field
 - `fields.some.path.issues` - Returns validation issues for a field
 - `fields.some.path.pending` - Returns whether validation is currently running for a field
 - `fields.some.path.addIssues(issues: string | string[])` - Adds one or more custom validation errors to a field, ignoring duplicate messages
 - `fields.some.path.removeIssue(issue: string)` - Removes a custom validation error from a field by message
-- `fields.some.path.clearIssues()` - Clears validation issues for a field
+- `fields.some.path.clearIssues()` - Clears validation issues for a field and any fields nested under it
 - `fields.some.path.addValidator(validator)` - Adds a field validator and returns a cleanup function
-- `allIssues` - Returns all validation issues
+- `allIssues` - Returns all currently displayed validation issues as a nested tree (form-level issues appear under the `''` key)
+- `allKnownIssues` - Debugging view: every issue currently known, whether displayed or not — everything the form holds right now (including unregistered and untouched fields) merged with custom and validator issues
+- `formIssues` - Returns form-level issues — issues without a field path, e.g. from `invalid('message')` on the server
 - `clearAllIssues()` - Clears all validation issues
-- `validateAll()` - Validates all registered fields (with server)
-- `updateIssues()` - Updates issues for all registered fields (populates from issues)
+- `validateAll()` - Validates all registered fields with the server (including untouched fields), then updates issues
+- `updateIssues()` - Updates issues for all registered fields and runs field validators (no validation request)
 
-Spread `.formHandler` onto the form to show all registered field issues when the user attempts to submit, even if SvelteKit preflight validation blocks the remote submission before the enhance callback runs.
+Spread `.formHandler` onto the form to show all registered field issues when the user attempts to submit, even if SvelteKit preflight validation blocks the remote submission before the enhance callback runs. This runs preflight validation only (no server request) — SvelteKit blocks submissions on preflight failure alone, and issues from the server arrive with the submission response instead.
+
+`.formHandler` also clears validation state (issues and dirty tracking) whenever the form resets — including the automatic reset after a successful submission — mirroring SvelteKit's own clearing of issues and touched state on reset.
 
 Use `.fields.some.path.handlers` to add the fields you want validated. The validation field shape mirrors the remote form field shape, so TypeScript can catch renamed or misspelled fields.
 
@@ -95,7 +101,7 @@ This allows you to add callbacks a little more easily (more like superforms) and
 ```ts
 import { createEnhancedForm } from '@opensky/remotes'
 
-const form = createEnhancedForm(remoteForm, {
+const enhanced = createEnhancedForm(remoteForm, {
 	validation: valid,
 	delayMs: 500,
 	timeoutMs: 3500
@@ -104,7 +110,7 @@ const form = createEnhancedForm(remoteForm, {
 
 Returns an object with:
 
-- `enhance(params, callbacks)` - Form enhancement handler
+- `enhance(form, callbacks?)` - Form enhancement handler. Pass it the instance SvelteKit provides to the remote form's `enhance` callback
 - `reset()` - Resets the form state back to 'idle'
 - `state` - Current form state (type-safe based on creation options)
 - `idle`, `pending`, `issues`, `error`, `result` - Boolean getters (always available)
@@ -119,24 +125,28 @@ Returns an object with:
 
 **Callbacks** (all optional):
 
-- `onSubmit` - Called when form submission begins. Receives `cancel()` and `updates()` functions:
+Every callback receives the remote form instance as `form` — the same object SvelteKit passes to the `enhance` callback. Use `form.element` for the `<form>` element and `form.fields.value()` for the data being submitted.
+
+- `onSubmit` - Called when form submission begins. Also receives `cancel()` and `updates()` functions:
   - `cancel(state?)` - Cancel submission and set state to 'idle' (default), 'error', or 'issues'
   - `updates(...queries)` - Provide queries/overrides for optimistic updates via `submit().updates(...)`
 - `onDelay` - Called when delayed state is reached (only allowed if `delayMs` is set)
 - `onTimeout` - Called when timeout state is reached (only allowed if `timeoutMs` is set)
-- `onReturn` - Called when form submission returns successfully
+- `onReturn` - Called when form submission returns successfully. Also receives `result`
 - `onIssues` - Called when form submission returns with validation issues
-- `onError` - Called when form submission encounters an error
+- `onError` - Called when form submission encounters an error. Also receives `error`
+
+After a successful submission the enhanced form resets the `<form>` element for you, matching SvelteKit's default enhance behavior.
 
 Use with the remote form's enhance method:
 
 ```svelte
 <form
-	{...remoteForm.preflight(schema).enhance((opts) =>
-		form.enhance(opts, {
-			onSubmit: ({ cancel, updates, data }) => {
+	{...remoteForm.preflight(schema).enhance((form) =>
+		enhanced.enhance(form, {
+			onSubmit: ({ form, cancel, updates }) => {
 				// Custom client-side checks before submission
-				if (!customValidationCheck(data)) {
+				if (!customValidationCheck(form.fields.value())) {
 					valid.fields.fieldName.addIssues('Custom validation failed')
 					cancel('issues') // Cancel and set state to 'issues'
 					return
@@ -155,12 +165,12 @@ Use with the remote form's enhance method:
 >
 	<!-- form fields -->
 
-	<button disabled={form.pending || form.delayed}>
-		{form.delayed ? 'Loading...' : 'Submit'}
+	<button disabled={enhanced.pending || enhanced.delayed}>
+		{enhanced.delayed ? 'Loading...' : 'Submit'}
 	</button>
 </form>
 
-{#if form.timeout}
+{#if enhanced.timeout}
 	<p>Request timed out</p>
 {/if}
 ```
@@ -183,19 +193,19 @@ Example of usage of both createValidation and createEnhancedForm
 	})
 
 	const valid = createValidation(myForm)
-	const form = createEnhancedForm(myForm, {
+	const enhanced = createEnhancedForm(myForm, {
 		validation: valid,
 		delayMs: 500,
 		timeoutMs: 3500
 	})
 </script>
 
-<p>State: {form.state}</p>
+<p>State: {enhanced.state}</p>
 
 <form
 	{...valid.formHandler}
-	{...myForm.preflight(schema).enhance((opts) =>
-		form.enhance(opts, {
+	{...myForm.preflight(schema).enhance((form) =>
+		enhanced.enhance(form, {
 			onDelay: () => console.log('showing loader'),
 			onTimeout: () => console.log('request timeout'),
 			onReturn: ({ result }) => console.log('success', result)
@@ -220,12 +230,12 @@ Example of usage of both createValidation and createEnhancedForm
 		class:error={valid.fields.address.state.issues}
 	/>
 
-	<button disabled={form.pending || form.delayed}>
-		{form.delayed ? 'Loading...' : 'Submit'}
+	<button disabled={enhanced.pending || enhanced.delayed}>
+		{enhanced.delayed ? 'Loading...' : 'Submit'}
 	</button>
 </form>
 
-{#if form.timeout}
+{#if enhanced.timeout}
 	<p>Request timed out</p>
 {/if}
 ```

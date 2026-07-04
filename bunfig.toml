@@ -1,0 +1,7 @@
+[install]
+# Require package versions to be at least 36 hours old before new resolution
+minimumReleaseAge = 129600
+
+[install.security]
+# Use socket to scan instalations
+scanner = "@socketsecurity/bun-security-scanner"

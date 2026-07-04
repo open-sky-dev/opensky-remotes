@@ -1,36 +1,31 @@
-import type { RemoteForm, RemoteFormInput, RemoteQueryUpdate } from '@sveltejs/kit'
-
-/**
- * Parameters passed to the enhance handler
- */
-type EnhanceParams<TData> = {
-	/** The HTML form element being submitted */
-	form: HTMLFormElement
-	/** Function to submit the form */
-	submit: () => Promise<boolean> & {
-		updates: (...queries: Array<RemoteQueryUpdate>) => Promise<boolean>
-	}
-	/** Form data being submitted */
-	data: TData
-}
-
-/**
- * Base context object passed to all enhance callbacks
- */
-type BaseEnhanceContext<TData, TResult> = EnhanceParams<TData> & {
-	/** The RemoteForm instance */
-	remote: RemoteForm<any, TResult>
-}
-
-/**
- * Current state of the form submission lifecycle
- */
-type FormState = 'idle' | 'pending' | 'delayed' | 'timeout' | 'issues' | 'error' | 'result'
+import type {
+	RemoteForm,
+	RemoteFormEnhanceInstance,
+	RemoteFormInput,
+	RemoteQueryUpdate
+} from '@sveltejs/kit'
+import { tick } from 'svelte'
 
 /**
  * Base form state (always present)
  */
 type BaseFormState = 'idle' | 'pending' | 'issues' | 'error' | 'result'
+
+/**
+ * Current state of the form submission lifecycle
+ */
+type FormState = BaseFormState | 'delayed' | 'timeout'
+
+/**
+ * Base context object passed to all enhance callbacks
+ */
+type EnhanceContext<TInput extends RemoteFormInput | void, TOutput> = {
+	/**
+	 * The remote form instance as received by the enhance callback.
+	 * Use `form.element` for the `<form>` element and `form.fields.value()` for the submitted data.
+	 */
+	form: RemoteFormEnhanceInstance<TInput, TOutput>
+}
 
 /**
  * Optional validation integration for form validation
@@ -55,17 +50,12 @@ type CreateEnhancedFormOptions = {
 }
 
 /**
- * Conditional state type based on delay/timeout presence
- */
-type ConditionalFormState<HasDelay extends boolean, HasTimeout extends boolean> =
-	| BaseFormState
-	| (HasDelay extends true ? 'delayed' : never)
-	| (HasTimeout extends true ? 'timeout' : never)
-
-/**
  * Submit context with cancel and updates functions
  */
-type SubmitContext<TData, TResult> = BaseEnhanceContext<TData, TResult> & {
+type SubmitContext<TInput extends RemoteFormInput | void, TOutput> = EnhanceContext<
+	TInput,
+	TOutput
+> & {
 	/** Cancel the submission and optionally set state to 'error' or 'issues'. Defaults to 'idle' if no argument provided. */
 	cancel: (state?: 'error' | 'issues') => void
 	/** Provide queries/overrides to be passed to submit().updates(...) for optimistic updates */
@@ -73,163 +63,118 @@ type SubmitContext<TData, TResult> = BaseEnhanceContext<TData, TResult> & {
 }
 
 /**
+ * Callback for delayed/timeout timing transitions
+ */
+type TimingCallback<TInput extends RemoteFormInput | void, TOutput> = (
+	ctx: EnhanceContext<TInput, TOutput>
+) => void | Promise<void>
+
+/**
  * Base callback functions available for all forms
  */
-type BaseCallbacks<TData, TResult> = {
+type BaseCallbacks<TInput extends RemoteFormInput | void, TOutput> = {
 	/** Called when form submission begins */
-	onSubmit?: (ctx: SubmitContext<TData, TResult>) => void | Promise<void>
+	onSubmit?: (ctx: SubmitContext<TInput, TOutput>) => void | Promise<void>
 	/** Called when form submission returns successfully */
-	onReturn?: (ctx: BaseEnhanceContext<TData, TResult> & { result: TResult }) => void | Promise<void>
+	onReturn?: (ctx: EnhanceContext<TInput, TOutput> & { result: TOutput }) => void | Promise<void>
 	/** Called when form submission returns with validation issues */
-	onIssues?: (ctx: BaseEnhanceContext<TData, TResult>) => void | Promise<void>
+	onIssues?: (ctx: EnhanceContext<TInput, TOutput>) => void | Promise<void>
 	/** Called when form submission encounters an error */
-	onError?: (ctx: BaseEnhanceContext<TData, TResult> & { error: unknown }) => void | Promise<void>
+	onError?: (ctx: EnhanceContext<TInput, TOutput> & { error: unknown }) => void | Promise<void>
 }
 
 /**
- * Callbacks with no delay or timeout
+ * Callbacks, conditionally including onDelay/onTimeout based on creation options
  */
-type CallbacksNoTiming<TData, TResult> = BaseCallbacks<TData, TResult>
+type Callbacks<
+	TInput extends RemoteFormInput | void,
+	TOutput,
+	HasDelay extends boolean,
+	HasTimeout extends boolean
+> = BaseCallbacks<TInput, TOutput> &
+	(HasDelay extends true
+		? {
+				/** Called when submission takes longer than delayMs */
+				onDelay?: TimingCallback<TInput, TOutput>
+			}
+		: { onDelay?: never }) &
+	(HasTimeout extends true
+		? {
+				/** Called when submission takes longer than timeoutMs */
+				onTimeout?: TimingCallback<TInput, TOutput>
+			}
+		: { onTimeout?: never })
 
 /**
- * Callbacks with delay only
+ * Enhanced form return type, conditionally including delayed/timeout state based on creation options
  */
-type CallbacksWithDelay<TData, TResult> = BaseCallbacks<TData, TResult> & {
-	/** Called when submission takes longer than delayMs */
-	onDelay?: (ctx: BaseEnhanceContext<TData, TResult>) => void | Promise<void>
-}
-
-/**
- * Callbacks with timeout only
- */
-type CallbacksWithTimeout<TData, TResult> = BaseCallbacks<TData, TResult> & {
-	/** Called when submission takes longer than timeoutMs */
-	onTimeout?: (ctx: BaseEnhanceContext<TData, TResult>) => void | Promise<void>
-}
-
-/**
- * Callbacks with both delay and timeout
- */
-type CallbacksWithBoth<TData, TResult> = BaseCallbacks<TData, TResult> & {
-	/** Called when submission takes longer than delayMs */
-	onDelay?: (ctx: BaseEnhanceContext<TData, TResult>) => void | Promise<void>
-	/** Called when submission takes longer than timeoutMs */
-	onTimeout?: (ctx: BaseEnhanceContext<TData, TResult>) => void | Promise<void>
-}
-
-/**
- * Return type with no delay or timeout
- */
-type EnhancedFormNoTiming<TOutput> = {
-	enhance: <TData>(
-		params: EnhanceParams<TData>,
-		callbacks: CallbacksNoTiming<TData, TOutput>
+type EnhancedForm<
+	TInput extends RemoteFormInput | void,
+	TOutput,
+	HasDelay extends boolean,
+	HasTimeout extends boolean
+> = {
+	/** Form enhancement handler — pass the instance received from the remote form's enhance callback */
+	enhance: (
+		form: RemoteFormEnhanceInstance<TInput, TOutput>,
+		callbacks?: Callbacks<TInput, TOutput, HasDelay, HasTimeout>
 	) => Promise<void>
+	/** Resets the form state back to 'idle' */
 	reset: () => void
-	state: 'idle' | 'pending' | 'issues' | 'error' | 'result'
+	/** Current form state */
+	state:
+		| BaseFormState
+		| (HasDelay extends true ? 'delayed' : never)
+		| (HasTimeout extends true ? 'timeout' : never)
 	idle: boolean
 	pending: boolean
 	issues: boolean
 	error: boolean
 	result: boolean
-}
-
-/**
- * Return type with delay only
- */
-type EnhancedFormWithDelay<TOutput> = {
-	enhance: <TData>(
-		params: EnhanceParams<TData>,
-		callbacks: CallbacksWithDelay<TData, TOutput>
-	) => Promise<void>
-	reset: () => void
-	state: 'idle' | 'pending' | 'delayed' | 'issues' | 'error' | 'result'
-	idle: boolean
-	pending: boolean
-	delayed: boolean
-	issues: boolean
-	error: boolean
-	result: boolean
-}
-
-/**
- * Return type with timeout only
- */
-type EnhancedFormWithTimeout<TOutput> = {
-	enhance: <TData>(
-		params: EnhanceParams<TData>,
-		callbacks: CallbacksWithTimeout<TData, TOutput>
-	) => Promise<void>
-	reset: () => void
-	state: 'idle' | 'pending' | 'timeout' | 'issues' | 'error' | 'result'
-	idle: boolean
-	pending: boolean
-	timeout: boolean
-	issues: boolean
-	error: boolean
-	result: boolean
-}
-
-/**
- * Return type with both delay and timeout
- */
-type EnhancedFormWithBoth<TOutput> = {
-	enhance: <TData>(
-		params: EnhanceParams<TData>,
-		callbacks: CallbacksWithBoth<TData, TOutput>
-	) => Promise<void>
-	reset: () => void
-	state: 'idle' | 'pending' | 'delayed' | 'timeout' | 'issues' | 'error' | 'result'
-	idle: boolean
-	pending: boolean
-	delayed: boolean
-	timeout: boolean
-	issues: boolean
-	error: boolean
-	result: boolean
-}
+} & (HasDelay extends true ? { delayed: boolean } : unknown) &
+	(HasTimeout extends true ? { timeout: boolean } : unknown)
 
 /**
  * Creates an enhanced form with reactive state management and lifecycle callbacks
- * @param remote - The RemoteForm object from createRemote
+ * @param remote - The remote form function
  * @param options - Optional configuration including validation integration, delayMs, and timeoutMs
  * @returns An object with enhance handler and reactive state getters (conditionally includes delayed/timeout based on options)
  */
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
 	options: { validation?: Validation; delayMs: number; timeoutMs: number }
-): EnhancedFormWithBoth<TOutput>
+): EnhancedForm<TInput, TOutput, true, true>
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
 	options: { validation?: Validation; delayMs: number; timeoutMs?: never }
-): EnhancedFormWithDelay<TOutput>
+): EnhancedForm<TInput, TOutput, true, false>
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
 	options: { validation?: Validation; delayMs?: never; timeoutMs: number }
-): EnhancedFormWithTimeout<TOutput>
+): EnhancedForm<TInput, TOutput, false, true>
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
 	options?: { validation?: Validation; delayMs?: never; timeoutMs?: never }
-): EnhancedFormNoTiming<TOutput>
+): EnhancedForm<TInput, TOutput, false, false>
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
+	// remote is unused at runtime but anchors TInput/TOutput inference
 	remote: RemoteForm<TInput, TOutput>,
-	options?: CreateEnhancedFormOptions
+	options: CreateEnhancedFormOptions = {}
 ):
-	| EnhancedFormNoTiming<TOutput>
-	| EnhancedFormWithDelay<TOutput>
-	| EnhancedFormWithTimeout<TOutput>
-	| EnhancedFormWithBoth<TOutput> {
-	const { validation, delayMs, timeoutMs } = options ?? {}
+	| EnhancedForm<TInput, TOutput, true, true>
+	| EnhancedForm<TInput, TOutput, true, false>
+	| EnhancedForm<TInput, TOutput, false, true>
+	| EnhancedForm<TInput, TOutput, false, false> {
+	const { validation, delayMs, timeoutMs } = options
 
-	type State = 'idle' | 'pending' | 'delayed' | 'timeout' | 'issues' | 'error' | 'result'
-	let state = $state<State>('idle')
+	let state = $state<FormState>('idle')
 
-	const enhanceHandler = async <TData>(
-		params: EnhanceParams<TData>,
-		callbacks: BaseCallbacks<TData, TOutput> & {
-			onDelay?: (ctx: BaseEnhanceContext<TData, TOutput>) => void | Promise<void>
-			onTimeout?: (ctx: BaseEnhanceContext<TData, TOutput>) => void | Promise<void>
-		}
+	const enhance = async (
+		form: RemoteFormEnhanceInstance<TInput, TOutput>,
+		callbacks: BaseCallbacks<TInput, TOutput> & {
+			onDelay?: TimingCallback<TInput, TOutput>
+			onTimeout?: TimingCallback<TInput, TOutput>
+		} = {}
 	) => {
 		const { onSubmit, onDelay, onTimeout, onReturn, onIssues, onError } = callbacks
 
@@ -239,25 +184,20 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 		let cancelledState: 'idle' | 'error' | 'issues' = 'idle'
 		let updateQueries: RemoteQueryUpdate[] = []
 
-		const baseContext: BaseEnhanceContext<TData, TOutput> = {
-			...params,
-			remote
-		}
-
-		const submitContext: SubmitContext<TData, TOutput> = {
-			...baseContext,
-			cancel: (cancelState?: 'error' | 'issues') => {
-				cancelled = true
-				cancelledState = cancelState ?? 'idle'
-			},
-			updates: (...queries: Array<RemoteQueryUpdate>) => {
-				updateQueries = queries
-			}
-		}
+		const context: EnhanceContext<TInput, TOutput> = { form }
 
 		try {
 			state = 'pending'
-			await onSubmit?.(submitContext)
+			await onSubmit?.({
+				...context,
+				cancel: (cancelState?: 'error' | 'issues') => {
+					cancelled = true
+					cancelledState = cancelState ?? 'idle'
+				},
+				updates: (...queries: Array<RemoteQueryUpdate>) => {
+					updateQueries = queries
+				}
+			})
 
 			// If cancelled, set the state and return early
 			if (cancelled) {
@@ -268,53 +208,61 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 			if (delayMs != null) {
 				delayTimer = setTimeout(() => {
 					state = 'delayed'
-					onDelay?.(baseContext)
+					onDelay?.(context)
 				}, delayMs)
 			}
 
 			if (timeoutMs != null) {
 				timeoutTimer = setTimeout(() => {
 					state = 'timeout'
-					onTimeout?.(baseContext)
+					onTimeout?.(context)
 				}, timeoutMs)
 			}
 
 			const valid =
 				updateQueries.length > 0
-					? await params.submit().updates(...updateQueries)
-					: await params.submit()
+					? await form.submit().updates(...updateQueries)
+					: await form.submit()
 
 			if (delayTimer) clearTimeout(delayTimer)
 			if (timeoutTimer) clearTimeout(timeoutTimer)
 
 			if (valid) {
 				state = 'result'
-				await onReturn?.({ ...baseContext, result: remote.result as TOutput })
-				params.form.reset()
+				await onReturn?.({ ...context, result: form.result as TOutput })
+				// Mirror SvelteKit's default enhance behavior: wait a tick, then
+				// reset via the prototype to avoid DOM clobbering
+				await tick()
+				HTMLFormElement.prototype.reset.call(form.element)
 			} else {
 				state = 'issues'
-				// Call validation.updateIssues if provided
-				await validation?.updateIssues()
-				await onIssues?.(baseContext)
+				try {
+					await validation?.updateIssues()
+				} catch {
+					// A failed issue refresh shouldn't escape the enhance callback
+					// (SvelteKit would navigate to the nearest error page)
+				}
+				await onIssues?.(context)
 			}
 		} catch (error) {
 			if (delayTimer) clearTimeout(delayTimer)
 			if (timeoutTimer) clearTimeout(timeoutTimer)
 
 			state = 'error'
-			// Call validation.validateAll if provided
-			await validation?.validateAll()
-			await onError?.({ ...baseContext, error })
+			try {
+				await validation?.validateAll()
+			} catch {
+				// A failed re-validation shouldn't mask the original error
+			}
+			await onError?.({ ...context, error })
 		}
 	}
 
-	const reset = () => {
-		state = 'idle'
-	}
-
-	const baseReturn = {
-		enhance: enhanceHandler,
-		reset,
+	return {
+		enhance,
+		reset: () => {
+			state = 'idle'
+		},
 		get state() {
 			return state
 		},
@@ -323,6 +271,12 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 		},
 		get pending() {
 			return state === 'pending'
+		},
+		get delayed() {
+			return state === 'delayed'
+		},
+		get timeout() {
+			return state === 'timeout'
 		},
 		get issues() {
 			return state === 'issues'
@@ -333,90 +287,5 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 		get result() {
 			return state === 'result'
 		}
-	}
-
-	if (delayMs != null && timeoutMs != null) {
-		return {
-			enhance: enhanceHandler,
-			reset,
-			get state() {
-				return state
-			},
-			get idle() {
-				return state === 'idle'
-			},
-			get pending() {
-				return state === 'pending'
-			},
-			get delayed() {
-				return state === 'delayed'
-			},
-			get timeout() {
-				return state === 'timeout'
-			},
-			get issues() {
-				return state === 'issues'
-			},
-			get error() {
-				return state === 'error'
-			},
-			get result() {
-				return state === 'result'
-			}
-		} as any
-	} else if (delayMs != null) {
-		return {
-			enhance: enhanceHandler,
-			reset,
-			get state() {
-				return state
-			},
-			get idle() {
-				return state === 'idle'
-			},
-			get pending() {
-				return state === 'pending'
-			},
-			get delayed() {
-				return state === 'delayed'
-			},
-			get issues() {
-				return state === 'issues'
-			},
-			get error() {
-				return state === 'error'
-			},
-			get result() {
-				return state === 'result'
-			}
-		} as any
-	} else if (timeoutMs != null) {
-		return {
-			enhance: enhanceHandler,
-			reset,
-			get state() {
-				return state
-			},
-			get idle() {
-				return state === 'idle'
-			},
-			get pending() {
-				return state === 'pending'
-			},
-			get timeout() {
-				return state === 'timeout'
-			},
-			get issues() {
-				return state === 'issues'
-			},
-			get error() {
-				return state === 'error'
-			},
-			get result() {
-				return state === 'result'
-			}
-		} as any
-	}
-
-	return baseReturn as any
+	} as EnhancedForm<TInput, TOutput, true, true>
 }

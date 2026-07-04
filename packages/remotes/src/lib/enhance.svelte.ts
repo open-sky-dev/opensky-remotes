@@ -159,31 +159,26 @@ type EnhancedForm<
  * @param options - Optional configuration including validation integration, delayMs, timeoutMs, and resetOnSuccess
  * @returns An object with enhance handler and reactive state getters (conditionally includes delayed/timeout based on options)
  */
-export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
+export function createEnhancedForm<
+	TInput extends RemoteFormInput | void,
+	TOutput,
+	// The inferred options type determines which delayed/timeout state and
+	// callbacks exist — passing delayMs unlocks 'delayed' and onDelay, etc.
+	TOptions extends CreateEnhancedFormOptions = Record<never, never>
+>(
 	remote: RemoteForm<TInput, TOutput>,
-	options: CommonOptions & { delayMs: number; timeoutMs: number }
-): EnhancedForm<TInput, TOutput, true, true>
-export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
-	remote: RemoteForm<TInput, TOutput>,
-	options: CommonOptions & { delayMs: number; timeoutMs?: never }
-): EnhancedForm<TInput, TOutput, true, false>
-export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
-	remote: RemoteForm<TInput, TOutput>,
-	options: CommonOptions & { delayMs?: never; timeoutMs: number }
-): EnhancedForm<TInput, TOutput, false, true>
-export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
-	remote: RemoteForm<TInput, TOutput>,
-	options?: CommonOptions & { delayMs?: never; timeoutMs?: never }
-): EnhancedForm<TInput, TOutput, false, false>
+	options?: TOptions
+): EnhancedForm<
+	TInput,
+	TOutput,
+	TOptions extends { delayMs: number } ? true : false,
+	TOptions extends { timeoutMs: number } ? true : false
+>
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	// remote is unused at runtime but anchors TInput/TOutput inference
 	remote: RemoteForm<TInput, TOutput>,
 	options: CreateEnhancedFormOptions = {}
-):
-	| EnhancedForm<TInput, TOutput, true, true>
-	| EnhancedForm<TInput, TOutput, true, false>
-	| EnhancedForm<TInput, TOutput, false, true>
-	| EnhancedForm<TInput, TOutput, false, false> {
+): EnhancedForm<TInput, TOutput, boolean, boolean> {
 	const { validation, delayMs, timeoutMs, resetOnSuccess = true } = options
 
 	let state = $state<FormState>('idle')

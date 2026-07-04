@@ -111,11 +111,13 @@ const enhanced = createEnhancedForm(remoteForm, {
 Returns an object with:
 
 - `enhance(form, callbacks?)` - Form enhancement handler. Pass it the instance SvelteKit provides to the remote form's `enhance` callback
-- `reset()` - Resets the form state back to 'idle'
+- `reset()` - Resets the form state back to 'idle' and stops any in-flight submission from updating state
 - `state` - Current form state (type-safe based on creation options)
 - `idle`, `pending`, `issues`, `error`, `result` - Boolean getters (always available)
 - `delayed` - Boolean getter (only available if `delayMs` was provided)
 - `timeout` - Boolean getter (only available if `timeoutMs` was provided)
+
+If a new submission starts while one is still in flight (e.g. a double submit), the older submission stops updating state and its remaining callbacks are skipped — the latest submission wins.
 
 **Creation Options:**
 
@@ -129,14 +131,16 @@ Every callback receives the remote form instance as `form` — the same object S
 
 - `onSubmit` - Called when form submission begins. Also receives `cancel()` and `updates()` functions:
   - `cancel(state?)` - Cancel submission and set state to 'idle' (default), 'error', or 'issues'
-  - `updates(...queries)` - Provide queries/overrides for optimistic updates via `submit().updates(...)`
+  - `updates(...queries)` - Provide queries/overrides for optimistic updates via `submit().updates(...)`. Only has effect when called during `onSubmit` — the queries are read once at submit time
 - `onDelay` - Called when delayed state is reached (only allowed if `delayMs` is set)
 - `onTimeout` - Called when timeout state is reached (only allowed if `timeoutMs` is set)
 - `onReturn` - Called when form submission returns successfully. Also receives `result`
 - `onIssues` - Called when form submission returns with validation issues
 - `onError` - Called when form submission encounters an error. Also receives `error`
 
-After a successful submission the enhanced form resets the `<form>` element for you, matching SvelteKit's default enhance behavior.
+Errors thrown by your callbacks are not treated as submission errors: they are logged to the console instead of escaping the enhance callback (which would send SvelteKit to the nearest error page). The one exception in effect: an error thrown in `onSubmit` aborts the submission and sets state to 'error', since its pre-submit checks may not have finished.
+
+After a successful submission the enhanced form resets the `<form>` element for you, matching SvelteKit's default (non-enhanced) behavior.
 
 Use with the remote form's enhance method:
 

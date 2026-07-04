@@ -38,11 +38,17 @@ type Validation = {
 }
 
 /**
- * Options for creating an enhanced form
+ * Options available regardless of delay/timeout configuration
  */
-type CreateEnhancedFormOptions = {
+type CommonOptions = {
 	/** Optional validation instance from createValidation for form validation integration */
 	validation?: Validation
+}
+
+/**
+ * Options for creating an enhanced form
+ */
+type CreateEnhancedFormOptions = CommonOptions & {
 	/** Milliseconds to wait before transitioning to 'delayed' state */
 	delayMs?: number
 	/** Milliseconds to wait before transitioning to 'timeout' state */
@@ -119,7 +125,7 @@ type EnhancedForm<
 		form: RemoteFormEnhanceInstance<TInput, TOutput>,
 		callbacks?: Callbacks<TInput, TOutput, HasDelay, HasTimeout>
 	) => Promise<void>
-	/** Resets the form state back to 'idle' */
+	/** Resets the form state back to 'idle' and stops any in-flight submission from updating state */
 	reset: () => void
 	/** Current form state */
 	state:
@@ -142,19 +148,19 @@ type EnhancedForm<
  */
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
-	options: { validation?: Validation; delayMs: number; timeoutMs: number }
+	options: CommonOptions & { delayMs: number; timeoutMs: number }
 ): EnhancedForm<TInput, TOutput, true, true>
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
-	options: { validation?: Validation; delayMs: number; timeoutMs?: never }
+	options: CommonOptions & { delayMs: number; timeoutMs?: never }
 ): EnhancedForm<TInput, TOutput, true, false>
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
-	options: { validation?: Validation; delayMs?: never; timeoutMs: number }
+	options: CommonOptions & { delayMs?: never; timeoutMs: number }
 ): EnhancedForm<TInput, TOutput, false, true>
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
-	options?: { validation?: Validation; delayMs?: never; timeoutMs?: never }
+	options?: CommonOptions & { delayMs?: never; timeoutMs?: never }
 ): EnhancedForm<TInput, TOutput, false, false>
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	// remote is unused at runtime but anchors TInput/TOutput inference
@@ -169,6 +175,27 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 
 	let state = $state<FormState>('idle')
 
+	// Each submission takes a generation; only the latest submission (and only
+	// while it hasn't been superseded by a newer submission or a reset()) may
+	// write state, fire callbacks, or reset the form
+	let latestSubmission = 0
+
+	/**
+	 * Runs a user callback, reporting errors instead of letting them escape:
+	 * a callback bug is not a submission error, and an error escaping the
+	 * enhance callback would send SvelteKit to the nearest error page.
+	 * Returns whether the callback completed without throwing.
+	 */
+	const runCallback = async (run: (() => void | Promise<void>) | undefined) => {
+		try {
+			await run?.()
+			return true
+		} catch (error) {
+			console.error('[createEnhancedForm] Error thrown by form callback:', error)
+			return false
+		}
+	}
+
 	const enhance = async (
 		form: RemoteFormEnhanceInstance<TInput, TOutput>,
 		callbacks: BaseCallbacks<TInput, TOutput> & {
@@ -178,6 +205,9 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 	) => {
 		const { onSubmit, onDelay, onTimeout, onReturn, onIssues, onError } = callbacks
 
+		const submission = ++latestSubmission
+		const isCurrent = () => submission === latestSubmission
+
 		let delayTimer: ReturnType<typeof setTimeout> | null = null
 		let timeoutTimer: ReturnType<typeof setTimeout> | null = null
 		let cancelled = false
@@ -186,67 +216,72 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 
 		const context: EnhanceContext<TInput, TOutput> = { form }
 
+		const clearTimers = () => {
+			if (delayTimer) clearTimeout(delayTimer)
+			if (timeoutTimer) clearTimeout(timeoutTimer)
+		}
+
+		state = 'pending'
+
+		const onSubmitOk = await runCallback(
+			onSubmit &&
+				(() =>
+					onSubmit({
+						...context,
+						cancel: (cancelState?: 'error' | 'issues') => {
+							cancelled = true
+							cancelledState = cancelState ?? 'idle'
+						},
+						updates: (...queries: Array<RemoteQueryUpdate>) => {
+							updateQueries = queries
+						}
+					}))
+		)
+
+		if (!isCurrent()) return
+
+		// An onSubmit that threw may not have finished its pre-submit checks —
+		// don't submit
+		if (!onSubmitOk) {
+			state = 'error'
+			return
+		}
+
+		// If cancelled, set the state and return early
+		if (cancelled) {
+			state = cancelledState
+			return
+		}
+
+		if (delayMs != null) {
+			delayTimer = setTimeout(() => {
+				// Only transition from 'pending' — never downgrade 'timeout'
+				// (possible when delayMs > timeoutMs) or clobber a settled state
+				if (!isCurrent() || state !== 'pending') return
+				state = 'delayed'
+				void runCallback(onDelay && (() => onDelay(context)))
+			}, delayMs)
+		}
+
+		if (timeoutMs != null) {
+			timeoutTimer = setTimeout(() => {
+				if (!isCurrent() || (state !== 'pending' && state !== 'delayed')) return
+				state = 'timeout'
+				void runCallback(onTimeout && (() => onTimeout(context)))
+			}, timeoutMs)
+		}
+
+		let valid: boolean
 		try {
-			state = 'pending'
-			await onSubmit?.({
-				...context,
-				cancel: (cancelState?: 'error' | 'issues') => {
-					cancelled = true
-					cancelledState = cancelState ?? 'idle'
-				},
-				updates: (...queries: Array<RemoteQueryUpdate>) => {
-					updateQueries = queries
-				}
-			})
-
-			// If cancelled, set the state and return early
-			if (cancelled) {
-				state = cancelledState
-				return
-			}
-
-			if (delayMs != null) {
-				delayTimer = setTimeout(() => {
-					state = 'delayed'
-					onDelay?.(context)
-				}, delayMs)
-			}
-
-			if (timeoutMs != null) {
-				timeoutTimer = setTimeout(() => {
-					state = 'timeout'
-					onTimeout?.(context)
-				}, timeoutMs)
-			}
-
-			const valid =
+			valid =
 				updateQueries.length > 0
 					? await form.submit().updates(...updateQueries)
 					: await form.submit()
-
-			if (delayTimer) clearTimeout(delayTimer)
-			if (timeoutTimer) clearTimeout(timeoutTimer)
-
-			if (valid) {
-				state = 'result'
-				await onReturn?.({ ...context, result: form.result as TOutput })
-				// Mirror SvelteKit's default enhance behavior: wait a tick, then
-				// reset via the prototype to avoid DOM clobbering
-				await tick()
-				HTMLFormElement.prototype.reset.call(form.element)
-			} else {
-				state = 'issues'
-				try {
-					await validation?.updateIssues()
-				} catch {
-					// A failed issue refresh shouldn't escape the enhance callback
-					// (SvelteKit would navigate to the nearest error page)
-				}
-				await onIssues?.(context)
-			}
+			clearTimers()
 		} catch (error) {
-			if (delayTimer) clearTimeout(delayTimer)
-			if (timeoutTimer) clearTimeout(timeoutTimer)
+			clearTimers()
+
+			if (!isCurrent()) return
 
 			state = 'error'
 			try {
@@ -254,13 +289,44 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 			} catch {
 				// A failed re-validation shouldn't mask the original error
 			}
-			await onError?.({ ...context, error })
+			await runCallback(onError && (() => onError({ ...context, error })))
+			return
+		}
+
+		if (!isCurrent()) return
+
+		if (valid) {
+			state = 'result'
+			await runCallback(
+				onReturn && (() => onReturn({ ...context, result: form.result as TOutput }))
+			)
+
+			// Mirror SvelteKit's default (non-enhanced) behavior: wait a tick,
+			// then reset via the prototype to avoid DOM clobbering
+			await tick()
+			// A newer submission may have started while we waited — don't wipe
+			// the form out from under it
+			if (isCurrent()) {
+				HTMLFormElement.prototype.reset.call(form.element)
+			}
+		} else {
+			state = 'issues'
+			try {
+				await validation?.updateIssues()
+			} catch {
+				// A failed issue refresh shouldn't escape the enhance callback
+				// (SvelteKit would navigate to the nearest error page)
+			}
+			if (!isCurrent()) return
+			await runCallback(onIssues && (() => onIssues(context)))
 		}
 	}
 
 	return {
 		enhance,
 		reset: () => {
+			// Invalidate any in-flight submission so it can't write state later
+			latestSubmission++
 			state = 'idle'
 		},
 		get state() {

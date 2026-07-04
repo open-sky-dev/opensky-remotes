@@ -1,7 +1,16 @@
 {
-	"author": "notnotjake",
 	"name": "@opensky/remotes",
+	"scripts": {
+		"check": "svelte-kit sync && tsc --noEmit --project ./tsconfig.json",
+		"format": "oxfmt .",
+		"lint": "oxfmt --check . && eslint .",
+		"dev": "bun run build && bun link",
+		"build": "svelte-kit sync && svelte-package && publint",
+		"prepack": "bun run build",
+		"prepare": "svelte-kit sync || echo ''"
+	},
 	"description": "SvelteKit remotes helper utilities",
+	"author": "notnotjake",
 	"version": "0.1.0",
 	"repository": {
 		"directory": "packages/remotes",
@@ -54,14 +63,5 @@
 	],
 	"svelte": "./dist/index.js",
 	"type": "module",
-	"types": "./dist/index.d.ts",
-	"scripts": {
-		"build": "svelte-kit sync && svelte-package && publint",
-		"dev": "bun run build && bun link",
-		"check": "svelte-kit sync && tsc --noEmit --project ./tsconfig.json",
-		"format": "oxfmt .",
-		"lint": "oxfmt --check . && eslint .",
-		"prepack": "bun run build",
-		"prepare": "svelte-kit sync || echo ''"
-	}
+	"types": "./dist/index.d.ts"
 }

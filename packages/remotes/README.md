@@ -126,6 +126,7 @@ If a new submission starts while one is still in flight (e.g. a double submit), 
 - `validation?` - Optional validation instance from `createValidation`
 - `delayMs?` - Milliseconds to wait before transitioning to 'delayed' state
 - `timeoutMs?` - Milliseconds to wait before transitioning to 'timeout' state
+- `resetOnSuccess?` - Whether to reset the `<form>` element after a successful submission (default: `true`). Set to `false` for edit/settings forms where the values should stay visible after saving
 
 **Callbacks** (all optional):
 
@@ -142,7 +143,7 @@ Every callback receives the remote form instance as `form` — the same object S
 
 Errors thrown by your callbacks are not treated as submission errors: they are logged to the console instead of escaping the enhance callback (which would send SvelteKit to the nearest error page). The one exception in effect: an error thrown in `onSubmit` aborts the submission and sets state to 'error', since its pre-submit checks may not have finished.
 
-After a successful submission the enhanced form resets the `<form>` element for you, matching SvelteKit's default (non-enhanced) behavior.
+After a successful submission the enhanced form resets the `<form>` element for you (unless `resetOnSuccess: false`), matching SvelteKit's default (non-enhanced) behavior. If you spread `valid.formHandler` from `createValidation` onto the form, this reset also clears validation state — passing `validation` to `createEnhancedForm` alone doesn't wire that up, so use both together.
 
 Use with the remote form's enhance method:
 

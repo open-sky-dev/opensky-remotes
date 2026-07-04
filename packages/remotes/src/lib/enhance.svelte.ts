@@ -43,6 +43,8 @@ type Validation = {
 type CommonOptions = {
 	/** Optional validation instance from createValidation for form validation integration */
 	validation?: Validation
+	/** Whether to reset the `<form>` element after a successful submission (default: true) */
+	resetOnSuccess?: boolean
 }
 
 /**
@@ -154,7 +156,7 @@ type EnhancedForm<
 /**
  * Creates an enhanced form with reactive state management and lifecycle callbacks
  * @param remote - The remote form function
- * @param options - Optional configuration including validation integration, delayMs, and timeoutMs
+ * @param options - Optional configuration including validation integration, delayMs, timeoutMs, and resetOnSuccess
  * @returns An object with enhance handler and reactive state getters (conditionally includes delayed/timeout based on options)
  */
 export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
@@ -182,7 +184,7 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 	| EnhancedForm<TInput, TOutput, true, false>
 	| EnhancedForm<TInput, TOutput, false, true>
 	| EnhancedForm<TInput, TOutput, false, false> {
-	const { validation, delayMs, timeoutMs } = options
+	const { validation, delayMs, timeoutMs, resetOnSuccess = true } = options
 
 	let state = $state<FormState>('idle')
 
@@ -312,13 +314,15 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 				onReturn && (() => onReturn({ ...context, result: form.result as TOutput }))
 			)
 
-			// Mirror SvelteKit's default (non-enhanced) behavior: wait a tick,
-			// then reset via the prototype to avoid DOM clobbering
-			await tick()
-			// A newer submission may have started while we waited — don't wipe
-			// the form out from under it
-			if (isCurrent()) {
-				HTMLFormElement.prototype.reset.call(form.element)
+			if (resetOnSuccess) {
+				// Mirror SvelteKit's default (non-enhanced) behavior: wait a tick,
+				// then reset via the prototype to avoid DOM clobbering
+				await tick()
+				// A newer submission may have started while we waited — don't wipe
+				// the form out from under it
+				if (isCurrent()) {
+					HTMLFormElement.prototype.reset.call(form.element)
+				}
 			}
 		} else {
 			state = 'issues'

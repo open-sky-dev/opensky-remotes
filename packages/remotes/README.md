@@ -112,10 +112,12 @@ Returns an object with:
 
 - `enhance(form, callbacks?)` - Form enhancement handler. Pass it the instance SvelteKit provides to the remote form's `enhance` callback
 - `reset()` - Resets the form state back to 'idle' and stops any in-flight submission from updating state
-- `state` - Current form state (type-safe based on creation options)
+- `state` - Current form state (type-safe based on creation options). Always exactly one state at a time
 - `idle`, `pending`, `issues`, `error`, `result` - Boolean getters (always available)
 - `delayed` - Boolean getter (only available if `delayMs` was provided)
 - `timeout` - Boolean getter (only available if `timeoutMs` was provided)
+
+The boolean getters are cumulative for in-flight states (like superforms): `pending` is true for the whole time a submission is in flight — including the 'delayed' and 'timeout' states — and `delayed` stays true once reached, including through 'timeout'. So `disabled={enhanced.pending}` is all you need for a submit button. Use `state` when you want the exclusive value.
 
 If a new submission starts while one is still in flight (e.g. a double submit), the older submission stops updating state and its remaining callbacks are skipped — the latest submission wins.
 
@@ -169,7 +171,7 @@ Use with the remote form's enhance method:
 >
 	<!-- form fields -->
 
-	<button disabled={enhanced.pending || enhanced.delayed}>
+	<button disabled={enhanced.pending}>
 		{enhanced.delayed ? 'Loading...' : 'Submit'}
 	</button>
 </form>
@@ -234,7 +236,7 @@ Example of usage of both createValidation and createEnhancedForm
 		class:error={valid.fields.address.state.issues}
 	/>
 
-	<button disabled={enhanced.pending || enhanced.delayed}>
+	<button disabled={enhanced.pending}>
 		{enhanced.delayed ? 'Loading...' : 'Submit'}
 	</button>
 </form>

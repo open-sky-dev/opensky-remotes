@@ -127,18 +127,29 @@ type EnhancedForm<
 	) => Promise<void>
 	/** Resets the form state back to 'idle' and stops any in-flight submission from updating state */
 	reset: () => void
-	/** Current form state */
+	/** Current form state (exclusive — exactly one state at a time) */
 	state:
 		| BaseFormState
 		| (HasDelay extends true ? 'delayed' : never)
 		| (HasTimeout extends true ? 'timeout' : never)
 	idle: boolean
+	/** True while a submission is in flight — includes the 'delayed' and 'timeout' states */
 	pending: boolean
 	issues: boolean
 	error: boolean
 	result: boolean
-} & (HasDelay extends true ? { delayed: boolean } : unknown) &
-	(HasTimeout extends true ? { timeout: boolean } : unknown)
+} & (HasDelay extends true
+	? {
+			/** True once a submission exceeds delayMs — stays true through 'timeout', implies pending */
+			delayed: boolean
+		}
+	: unknown) &
+	(HasTimeout extends true
+		? {
+				/** True once a submission exceeds timeoutMs — implies pending */
+				timeout: boolean
+			}
+		: unknown)
 
 /**
  * Creates an enhanced form with reactive state management and lifecycle callbacks
@@ -336,10 +347,10 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 			return state === 'idle'
 		},
 		get pending() {
-			return state === 'pending'
+			return state === 'pending' || state === 'delayed' || state === 'timeout'
 		},
 		get delayed() {
-			return state === 'delayed'
+			return state === 'delayed' || state === 'timeout'
 		},
 		get timeout() {
 			return state === 'timeout'

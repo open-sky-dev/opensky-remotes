@@ -4,6 +4,8 @@ Provides two helpers `createValidation` and `createEnhancedForm` that improve th
 
 Requires `@sveltejs/kit` 2.68.0 or newer (targets the current remote form `enhance` instance API).
 
+A runnable demo app lives in [`examples/contact-form`](examples/contact-form) — see its README for setup.
+
 ## createValidation
 
 Use this to achieve better user experience around validation issues. Fields become dirty when the user changes their value. Issues appear when a dirty field loses focus (`onblur` events), and existing issues are cleared on input when the new value is valid. This way focus alone does not show validation issues, and you don't see new issues appear as you type.

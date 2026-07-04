@@ -206,10 +206,7 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 
 	const enhance = async (
 		form: RemoteFormEnhanceInstance<TInput, TOutput>,
-		callbacks: BaseCallbacks<TInput, TOutput> & {
-			onDelay?: TimingCallback<TInput, TOutput>
-			onTimeout?: TimingCallback<TInput, TOutput>
-		} = {}
+		callbacks: Callbacks<TInput, TOutput, true, true> = {}
 	) => {
 		const { onSubmit, onDelay, onTimeout, onReturn, onIssues, onError } = callbacks
 
@@ -297,6 +294,7 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 			} catch {
 				// A failed re-validation shouldn't mask the original error
 			}
+			if (!isCurrent()) return
 			await runCallback(onError && (() => onError({ ...context, error })))
 			return
 		}
@@ -363,5 +361,7 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 		get result() {
 			return state === 'result'
 		}
+		// The widened implementation signature erases the delayed/timeout getters,
+		// which always exist at runtime — assert the fully-equipped shape
 	} as EnhancedForm<TInput, TOutput, true, true>
 }

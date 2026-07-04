@@ -8,7 +8,13 @@ Requires `@sveltejs/kit` 2.68.0 or newer (targets the current remote form `enhan
 
 Use this to achieve better user experience around validation issues. Fields become dirty when the user changes their value. Issues appear when a dirty field loses focus (`onblur` events), and existing issues are cleared on input when the new value is valid. This way focus alone does not show validation issues, and you don't see new issues appear as you type.
 
-This follows the same validation as superforms did and is inspired by several articles. **(todo: links)**
+This follows the same validation as superforms did and is inspired by several articles.
+
+Resources:
+
+- [Inline Validation in Forms: Designing the Experience](https://medium.com/wdstack/inline-validation-in-forms-designing-the-experience-123fb34088ce)
+- [Inline Validation in Web Forms](https://alistapart.com/article/inline-validation-in-web-forms/)
+- [Inline validation resources from Aral Balkan](https://ar.al/1161/)
 
 #### Usage
 

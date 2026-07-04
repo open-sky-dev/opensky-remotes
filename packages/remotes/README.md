@@ -2,7 +2,7 @@
 
 Provides two helpers `createValidation` and `createEnhancedForm` that improve the behaviors and experience working with [remote form functions](https://svelte.dev/docs/kit/remote-functions#form).
 
-Requires `@sveltejs/kit` 2.68.0 or newer (targets the current remote form `enhance` instance API).
+Requires `@sveltejs/kit` 2.68.0 or newer (targets the current remote form `enhance` instance API). Remote functions are experimental in SvelteKit, so your app must have them enabled in `svelte.config.js` (`kit.experimental.remoteFunctions`, plus `compilerOptions.experimental.async`).
 
 ## createValidation
 

@@ -1,5 +1,7 @@
 # @opensky/remotes
 
+[![npm](https://img.shields.io/npm/v/@opensky/remotes)](https://www.npmjs.com/package/@opensky/remotes)
+
 Provides two helpers `createValidation` and `createEnhancedForm` that improve the behaviors and experience working with [remote form functions](https://svelte.dev/docs/kit/remote-functions#form).
 
 Requires `@sveltejs/kit` 2.68.0 or newer (targets the current remote form `enhance` instance API).

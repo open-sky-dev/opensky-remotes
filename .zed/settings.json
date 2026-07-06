@@ -1,0 +1,44 @@
+{
+	"languages": {
+		"JavaScript": {
+			"formatter": {
+				"external": {
+					"command": "packages/remotes/node_modules/.bin/oxfmt",
+					"arguments": ["--stdin-filepath", "{buffer_path}"]
+				}
+			}
+		},
+		"TypeScript": {
+			"formatter": {
+				"external": {
+					"command": "packages/remotes/node_modules/.bin/oxfmt",
+					"arguments": ["--stdin-filepath", "{buffer_path}"]
+				}
+			}
+		},
+		"TSX": {
+			"formatter": {
+				"external": {
+					"command": "packages/remotes/node_modules/.bin/oxfmt",
+					"arguments": ["--stdin-filepath", "{buffer_path}"]
+				}
+			}
+		},
+		"JSON": {
+			"formatter": {
+				"external": {
+					"command": "packages/remotes/node_modules/.bin/oxfmt",
+					"arguments": ["--stdin-filepath", "{buffer_path}"]
+				}
+			}
+		},
+		"JSONC": {
+			"formatter": {
+				"external": {
+					"command": "packages/remotes/node_modules/.bin/oxfmt",
+					"arguments": ["--stdin-filepath", "{buffer_path}"]
+				}
+			}
+		}
+	}
+}

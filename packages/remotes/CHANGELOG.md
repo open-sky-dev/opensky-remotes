@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.1.0]
+## [0.1.0] - 2026-07-04
 
 ### Added
 
@@ -37,7 +37,7 @@
 - `validateAll()` and `updateIssues()` now refresh fields in parallel instead of sequentially, so total latency is the slowest field's validators rather than the sum of all of them (validator order within a field is preserved).
 - `allIssues` no longer retains `null` entries for fields whose issues were cleared — cleared fields simply disappear from the tree.
 
-## [0.0.3]
+## [0.0.3] - 2025-10-23
 
 ### Added
 
@@ -51,13 +51,13 @@
 - **BREAKING**: Renamed `validator` option to `validation` in `createEnhancedForm` for consistency with `createValidation`.
 - **BREAKING**: Moved `delayMs` and `timeoutMs` from enhance callback options to `createEnhancedForm` creation options. This enables type-safe conditional states where `delayed` and `timeout` state accessors are only available when their corresponding timing options are provided. Callbacks (`onDelay`, `onTimeout`) are now optional but can only be used when the corresponding timing option is set at creation.
 
-## [0.0.2]
+## [0.0.2] - 2025-10-22
 
 ### Added
 
 - `createEnhancedForm` helper for managing form submission lifecycle with state tracking and callbacks. Provides reactive state getters (idle, pending, delayed, timeout, issues, error, success) and integrates with createValidation for automatic validation handling.
 
-## [0.0.1]
+## [0.0.1] - 2025-10-21
 
 ### Added
 

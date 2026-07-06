@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Added a `default` condition to the package `exports` so non-Svelte-aware tooling (vitest, plain Node) can resolve the package.
+
 ## [0.1.0] - 2026-07-04
 
 ### Added

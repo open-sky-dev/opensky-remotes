@@ -9,16 +9,16 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
 	},
 	"dependencies": {
-		"@opensky/remotes": "file:../../packages/remotes",
+		"@opensky/remotes": "workspace:*",
 		"valibot": "^1.4.2"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^6.1.0",
 		"@sveltejs/kit": "^2.69.1",
-		"@sveltejs/vite-plugin-svelte": "^6.2.4",
+		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"svelte": "^5.56.4",
 		"svelte-check": "^4.7.1",
-		"typescript": "^5.9.3",
-		"vite": "^7.3.6"
+		"typescript": "^6.0.3",
+		"vite": "^8.1.3"
 	}
 }

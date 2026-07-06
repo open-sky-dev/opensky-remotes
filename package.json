@@ -1,0 +1,19 @@
+{
+	"name": "opensky-remotes-monorepo",
+	"private": true,
+	"type": "module",
+	"workspaces": [
+		"packages/*",
+		"examples/*"
+	],
+	"devDependencies": {
+		"@socketsecurity/bun-security-scanner": "^1.1.2"
+	},
+	"scripts": {
+		"build": "bun run --cwd packages/remotes build",
+		"check": "bun run --cwd packages/remotes check",
+		"lint": "bun run --cwd packages/remotes lint",
+		"format": "bun run --cwd packages/remotes format",
+		"example": "bun run --cwd packages/remotes build && bun run --cwd examples/contact-form dev"
+	}
+}

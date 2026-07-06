@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "$(dirname "$0")/../../packages/remotes"
+cd "$(dirname "$0")/../.."
 
 bun install --frozen-lockfile
 
@@ -9,6 +9,6 @@ bun install --frozen-lockfile
 bun --bun run check
 
 # Runtime tests, once any exist
-if find src -name '*.test.ts' -o -name '*.spec.ts' | grep -q .; then
-	bun test
+if find packages/remotes/src -name '*.test.ts' -o -name '*.spec.ts' | grep -q .; then
+	cd packages/remotes && bun test
 fi

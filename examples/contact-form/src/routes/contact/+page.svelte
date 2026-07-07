@@ -1,8 +1,13 @@
 <script lang="ts">
 	import { enhancedForm } from '@opensky/remotes'
+	import CodeViewer from '$lib/CodeViewer.svelte'
 
 	import { contactForm } from './form.remote'
 	import { contactSchema } from './schema'
+
+	import pageSource from './+page.svelte?raw'
+	import remoteSource from './form.remote.ts?raw-source'
+	import schemaSource from './schema.ts?raw'
 
 	const form = enhancedForm(contactForm, {
 		delayMs: 300,
@@ -28,14 +33,15 @@
 </script>
 
 <svelte:head>
-	<title>Contact Form — @opensky/remotes</title>
+	<title>Contact form — @opensky/remotes</title>
 </svelte:head>
 
 <main>
-	<h1>Contact Form</h1>
+	<h1>Contact form</h1>
 	<p class="hint">
-		Try <code>test@test.com</code> (async validator), <code>taken@test.com</code> (server-only
-		issue), or the word <code>spam</code> in the message.
+		Inline validation with custom validators, plus tracked submission state. Try
+		<code>test@test.com</code> (async validator), <code>taken@test.com</code> (server-only issue),
+		or the word <code>spam</code> in the message.
 	</p>
 
 	<form
@@ -56,7 +62,6 @@
 				{...form.fields.name.persist}
 				autocomplete="name"
 				placeholder="Ada Lovelace"
-				aria-invalid={form.fields.name.issues ? 'true' : undefined}
 				class:invalid={form.fields.name.issues}
 			/>
 		</label>
@@ -74,7 +79,6 @@
 				{...form.fields.email.persist}
 				autocomplete="email"
 				placeholder="ada@example.com"
-				aria-invalid={form.fields.email.issues ? 'true' : undefined}
 				class:invalid={form.fields.email.issues}
 			/>
 		</label>
@@ -95,7 +99,6 @@
 				{...form.fields.message.persist}
 				rows="5"
 				placeholder="Write at least 10 characters"
-				aria-invalid={form.fields.message.issues ? 'true' : undefined}
 				class:invalid={form.fields.message.issues}
 			></textarea>
 		</label>
@@ -125,14 +128,24 @@
 			<p class="success">Submitted!</p>
 		{/if}
 	</aside>
+
+	<CodeViewer
+		files={[
+			{ name: '+page.svelte', source: pageSource },
+			{ name: 'form.remote.ts', source: remoteSource },
+			{ name: 'schema.ts', source: schemaSource }
+		]}
+	/>
 </main>
 
 <style>
 	main {
-		max-width: 28rem;
-		margin: 3rem auto;
-		padding: 0 1rem;
-		font-family: system-ui, sans-serif;
+		padding-top: 2rem;
+	}
+
+	h1 {
+		margin: 0 0 0.5rem;
+		font-size: 1.5rem;
 	}
 
 	form {

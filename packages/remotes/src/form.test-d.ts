@@ -101,7 +101,8 @@ export function typeTests() {
 		const form = enhancedForm(remote, {
 			delayMs: 500,
 			timeoutMs: 3000,
-			preventResetOnSuccess: true
+			preventResetOnSuccess: true,
+			persist: { key: 'custom', storage: 'session', maxAgeMs: 60_000 }
 		})
 
 		assertType<'idle' | 'pending' | 'issues' | 'error' | 'result' | 'delayed' | 'timeout'>(
@@ -126,11 +127,12 @@ export function typeTests() {
 	// @ts-expect-error -- resetOnSuccess was replaced by preventResetOnSuccess
 	void enhancedForm(remote, { resetOnSuccess: false })
 
-	// Field surface: validate spread, mirrored field shape
+	// Field surface: validate/persist spreads, mirrored field shape
 	{
 		const form = enhancedForm(remote)
 
 		void form.fields.name.validate.onblur
+		void form.fields.name.persist
 		void form.fields.address.state.validate
 		assertType<string[] | null>(form.fields.address.state.issues)
 		assertType<boolean>(form.fields.name.pending)
@@ -147,6 +149,7 @@ export function typeTests() {
 		void form.handlers.onsubmitcapture
 		void form.reset()
 		void form.resetState()
+		void form.discardPersisted()
 		assertType<string[] | null>(form.formIssues)
 		void form.clearAllIssues()
 		void form.validateAll()

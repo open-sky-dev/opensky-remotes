@@ -12,6 +12,7 @@ import {
 	type ValidationHandlers,
 	type ValidationIssues
 } from './validation.svelte'
+import { createPersistCore, type PersistOptions, type PersistSpread } from './persist.svelte'
 
 /**
  * Base form state (always present)
@@ -42,6 +43,8 @@ type CommonOptions = {
 	delayMs?: number
 	/** Milliseconds to wait before transitioning to 'timeout' state */
 	timeoutMs?: number
+	/** Draft persistence overrides — fields opt in by spreading `form.fields.<path>.persist` */
+	persist?: PersistOptions
 }
 
 /**
@@ -130,6 +133,8 @@ type FieldValue<T, K extends PropertyKey> = T extends unknown
 export type FormField<TValue = unknown> = {
 	/** Spread onto the input to opt it into validation (onblur/oninput) */
 	validate: ValidationHandlers
+	/** Spread onto the input to opt it into draft persistence */
+	persist: PersistSpread
 	issues: string[] | null
 	pending: boolean
 	addIssues: (issues: string | string[]) => void
@@ -172,6 +177,8 @@ export type EnhancedForm<
 	reset: () => void
 	/** Resets only the submission state back to 'idle', leaving the form's values alone */
 	resetState: () => void
+	/** Discards the persisted draft */
+	discardPersisted: () => void
 	/** Current form state (exclusive — exactly one state at a time) */
 	state:
 		| BaseFormState
@@ -207,10 +214,10 @@ export type EnhancedForm<
 		: unknown)
 
 /**
- * Creates an enhanced form: submission state tracking with semantic callbacks
- * and inline validation around a SvelteKit remote form function.
+ * Creates an enhanced form: submission state tracking with semantic callbacks,
+ * inline validation, and draft persistence around a SvelteKit remote form function.
  * @param remote - The remote form function
- * @param options - Optional configuration (timings, preventResetOnSuccess)
+ * @param options - Optional configuration (timings, persist, preventResetOnSuccess)
  * @returns An object with the form-level `handlers` spread, per-field helpers,
  * the `enhance` handler, and reactive state getters (delayed/timeout only when configured)
  */
@@ -233,11 +240,46 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
 	options: EnhancedFormOptions = {}
 ): EnhancedForm<TInput, TOutput, boolean, boolean> {
-	const { delayMs, timeoutMs } = options
+	const { delayMs, timeoutMs, persist } = options
 
 	const resetOnSuccess = !options.preventResetOnSuccess
 
 	const validation = createValidationCore(remote)
+
+	/**
+	 * Writes a restored draft value into kit's reactive field state so inputs
+	 * driven by `as()` spreads pick it up
+	 */
+	function setKitField(path: string[], value: unknown) {
+		let current: unknown = remote.fields
+
+		for (const key of path) {
+			if (!current || (typeof current !== 'object' && typeof current !== 'function')) {
+				return
+			}
+			current = (current as Record<string, unknown>)[key]
+		}
+
+		const field = current as { set?: (value: unknown) => unknown } | undefined
+		if (typeof field?.set === 'function') {
+			try {
+				field.set(value)
+			} catch {
+				// The element already carries the restored value — kit state is best-effort
+			}
+		}
+	}
+
+	const persistence = createPersistCore({
+		// The action id is a deterministic hash of the remote file's path plus the
+		// export name (and any .for() key), so it is stable across reloads/builds
+		// and self-invalidates when the remote function moves or is renamed
+		storageKey: `opensky-remotes:${persist?.key ?? remote.action}`,
+		storage: persist?.storage ?? 'local',
+		maxAgeMs: persist?.maxAgeMs,
+		markDirty: validation.markDirty,
+		setKitField
+	})
 
 	let state = $state<FormState>('idle')
 
@@ -267,6 +309,10 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 
 					if (property === 'validate') {
 						return validation.validate(path)
+					}
+
+					if (property === 'persist') {
+						return persistence.attachment(path)
 					}
 
 					if (property === 'issues') {
@@ -420,6 +466,8 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 
 		if (valid) {
 			state = 'result'
+			// The submitted values are saved — the draft has served its purpose
+			persistence.discard()
 			await runCallback(
 				onReturn && (() => onReturn({ ...context, result: form.result as TOutput }))
 			)
@@ -463,9 +511,11 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 			const element = remote.element
 			if (element) {
 				// Fires the form's reset event, which also clears validation state
+				// and discards the persisted draft
 				HTMLFormElement.prototype.reset.call(element)
 			}
 		},
+		discardPersisted: () => persistence.discard(),
 		get state() {
 			return state
 		},

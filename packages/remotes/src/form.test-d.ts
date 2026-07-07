@@ -1,7 +1,8 @@
 /**
  * Compile-time tests for enhancedForm's conditional types: the delayed/timeout
  * state and the onDelay/onTimeout callbacks must only be available when
- * delayMs/timeoutMs were passed at creation.
+ * delayMs/timeoutMs were passed at creation, and autoSubmit must exclude
+ * preventResetOnSuccess.
  *
  * This file is type-checked by `bun run check` but never imported at runtime
  * (and lives outside src/lib, so it is not packaged). An unfulfilled
@@ -122,6 +123,19 @@ export function typeTests() {
 			}
 		})
 	}
+
+	// autoSubmit accepts boolean shorthand and a debounce object
+	{
+		void enhancedForm(remote, { autoSubmit: true })
+		void enhancedForm(remote, { autoSubmit: { debounceMs: 300 } })
+		void enhancedForm(remote, { autoSubmit: false, preventResetOnSuccess: true })
+	}
+
+	// autoSubmit excludes preventResetOnSuccess — auto-submitting forms never reset
+	// @ts-expect-error -- preventResetOnSuccess is not accepted alongside autoSubmit
+	void enhancedForm(remote, { autoSubmit: true, preventResetOnSuccess: true })
+	// @ts-expect-error -- preventResetOnSuccess is not accepted alongside autoSubmit
+	void enhancedForm(remote, { autoSubmit: { debounceMs: 300 }, preventResetOnSuccess: false })
 
 	// The pre-merge option name is gone
 	// @ts-expect-error -- resetOnSuccess was replaced by preventResetOnSuccess

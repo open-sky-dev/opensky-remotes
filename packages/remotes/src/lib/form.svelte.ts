@@ -4,6 +4,8 @@ import type {
 	RemoteFormInput,
 	RemoteQueryUpdate
 } from '@sveltejs/kit'
+import type { Attachment } from 'svelte/attachments'
+import { createAttachmentKey } from 'svelte/attachments'
 import { tick } from 'svelte'
 import {
 	createValidationCore,
@@ -36,6 +38,14 @@ type EnhanceContext<TInput extends RemoteFormInput | void, TOutput> = {
 }
 
 /**
+ * Auto-submit configuration
+ */
+type AutoSubmitOptions = {
+	/** Milliseconds of input inactivity before the form auto-submits (default: 600) */
+	debounceMs?: number
+}
+
+/**
  * Options available regardless of delay/timeout configuration
  */
 type CommonOptions = {
@@ -48,12 +58,23 @@ type CommonOptions = {
 }
 
 /**
- * Options for creating an enhanced form
+ * Options for creating an enhanced form. `autoSubmit` and
+ * `preventResetOnSuccess` are mutually exclusive: auto-submitting forms never
+ * reset, so there is nothing left to opt into.
  */
-export type EnhancedFormOptions = CommonOptions & {
-	/** Keep the form's values after a successful submission instead of resetting (default: false) */
-	preventResetOnSuccess?: boolean
-}
+export type EnhancedFormOptions = CommonOptions &
+	(
+		| {
+				/** Auto-submit the form after input settles (debounced; flushed on change) */
+				autoSubmit: true | AutoSubmitOptions
+				preventResetOnSuccess?: never
+		  }
+		| {
+				autoSubmit?: false
+				/** Keep the form's values after a successful submission instead of resetting (default: false) */
+				preventResetOnSuccess?: boolean
+		  }
+	)
 
 /**
  * Submit context with cancel and updates functions
@@ -112,13 +133,13 @@ type Callbacks<
 		: { onTimeout?: never })
 
 /**
- * The spread for the `<form>` element: submit-attempt issue display and
- * validation clearing on reset
+ * The spread for the `<form>` element: submit-attempt issue display, validation
+ * clearing on reset, and (when autoSubmit is enabled) the input listener
  */
 export type FormHandlers = {
 	onsubmitcapture: () => Promise<void>
 	onreset: () => void
-}
+} & Record<symbol, Attachment>
 
 type FieldValue<T, K extends PropertyKey> = T extends unknown
 	? K extends keyof T
@@ -127,8 +148,8 @@ type FieldValue<T, K extends PropertyKey> = T extends unknown
 	: never
 
 /**
- * Per-field surface: the spread to opt into validation, plus issue accessors
- * and custom issue/validator management
+ * Per-field surface: spreads to opt into validation and persistence, plus
+ * issue accessors and custom issue/validator management
  */
 export type FormField<TValue = unknown> = {
 	/** Spread onto the input to opt it into validation (onblur/oninput) */
@@ -213,11 +234,32 @@ export type EnhancedForm<
 			}
 		: unknown)
 
+const DEFAULT_AUTO_SUBMIT_DEBOUNCE_MS = 600
+
+/**
+ * Serializes the form's current data for change detection. Auto-submit skips
+ * submissions whose data matches what was last submitted.
+ */
+function snapshot(element: HTMLFormElement): string {
+	const entries: Array<[string, string]> = []
+
+	for (const [key, value] of new FormData(element)) {
+		entries.push([
+			key,
+			typeof value === 'string' ? value : `file:${value.name}:${value.size}:${value.lastModified}`
+		])
+	}
+
+	entries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+	return JSON.stringify(entries)
+}
+
 /**
  * Creates an enhanced form: submission state tracking with semantic callbacks,
- * inline validation, and draft persistence around a SvelteKit remote form function.
+ * inline validation, draft persistence, and optional auto-submission — all
+ * around a SvelteKit remote form function.
  * @param remote - The remote form function
- * @param options - Optional configuration (timings, persist, preventResetOnSuccess)
+ * @param options - Optional configuration (timings, autoSubmit, persist, preventResetOnSuccess)
  * @returns An object with the form-level `handlers` spread, per-field helpers,
  * the `enhance` handler, and reactive state getters (delayed/timeout only when configured)
  */
@@ -238,11 +280,20 @@ export function enhancedForm<
 >
 export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
-	options: EnhancedFormOptions = {}
+	options: CommonOptions & {
+		autoSubmit?: boolean | AutoSubmitOptions
+		preventResetOnSuccess?: boolean
+	} = {}
 ): EnhancedForm<TInput, TOutput, boolean, boolean> {
-	const { delayMs, timeoutMs, persist } = options
+	const { delayMs, timeoutMs, autoSubmit, persist } = options
 
-	const resetOnSuccess = !options.preventResetOnSuccess
+	const autoSubmitEnabled = !!autoSubmit
+	const autoSubmitDebounceMs =
+		(typeof autoSubmit === 'object' ? autoSubmit.debounceMs : undefined) ??
+		DEFAULT_AUTO_SUBMIT_DEBOUNCE_MS
+	// Auto-submitting forms never reset — clearing a field the user just
+	// auto-saved would be jarring
+	const resetOnSuccess = !options.preventResetOnSuccess && !autoSubmitEnabled
 
 	const validation = createValidationCore(remote)
 
@@ -288,12 +339,87 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	// write state, fire callbacks, or reset the form
 	let latestSubmission = 0
 
+	// --- auto-submit ---
+
+	let autoSubmitTimer: ReturnType<typeof setTimeout> | null = null
+	// A debounce that fired mid-submission waits for it to settle, then
+	// re-checks: submit once more only if the data changed since
+	let autoSubmitQueued = false
+	let lastSubmittedSnapshot: string | null = null
+	let attachedForm: HTMLFormElement | null = null
+
+	function clearAutoSubmitTimer() {
+		if (autoSubmitTimer) {
+			clearTimeout(autoSubmitTimer)
+			autoSubmitTimer = null
+		}
+	}
+
+	function fireAutoSubmit() {
+		const element = attachedForm ?? remote.element
+		if (!element) {
+			return
+		}
+
+		// Never re-submit unchanged data
+		if (lastSubmittedSnapshot !== null && snapshot(element) === lastSubmittedSnapshot) {
+			return
+		}
+
+		if (state === 'pending' || state === 'delayed' || state === 'timeout') {
+			autoSubmitQueued = true
+			return
+		}
+
+		// The front door: fires a real submit event, so preflight, the
+		// submit-attempt issue display, and the enhance pipeline all run
+		element.requestSubmit()
+	}
+
+	const autoSubmitAttachment: Attachment = (node) => {
+		if (!(node instanceof HTMLFormElement)) {
+			return
+		}
+
+		attachedForm = node
+
+		const onInput = () => {
+			clearAutoSubmitTimer()
+			autoSubmitTimer = setTimeout(() => {
+				autoSubmitTimer = null
+				fireAutoSubmit()
+			}, autoSubmitDebounceMs)
+		}
+
+		// change means the value was committed (text blur, select/checkbox pick) —
+		// no reason to keep waiting
+		const onChange = () => {
+			clearAutoSubmitTimer()
+			fireAutoSubmit()
+		}
+
+		node.addEventListener('input', onInput)
+		node.addEventListener('change', onChange)
+
+		return () => {
+			// A debounce pending at teardown is dropped — persistence holds the draft
+			clearAutoSubmitTimer()
+			autoSubmitQueued = false
+			attachedForm = null
+			node.removeEventListener('input', onInput)
+			node.removeEventListener('change', onChange)
+		}
+	}
+
 	const handlers: FormHandlers = {
 		// Shows blocking preflight issues even when SvelteKit blocks the
 		// submission before the enhance callback runs
 		onsubmitcapture: validation.validateSubmitAttempt,
 		// Kit clears its issues and touched state on form reset; clear ours too
 		onreset: validation.clearAllIssues
+	}
+	if (autoSubmitEnabled) {
+		handlers[createAttachmentKey()] = autoSubmitAttachment
 	}
 
 	// --- fields proxy ---
@@ -367,6 +493,16 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 		}
 	}
 
+	/**
+	 * Re-fires a queued auto-submit once the submission that blocked it settles
+	 */
+	function flushQueuedAutoSubmit() {
+		if (autoSubmitQueued) {
+			autoSubmitQueued = false
+			fireAutoSubmit()
+		}
+	}
+
 	const enhance = async (
 		form: RemoteFormEnhanceInstance<TInput, TOutput>,
 		callbacks: Callbacks<TInput, TOutput, true, true> = {}
@@ -390,6 +526,10 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 		}
 
 		state = 'pending'
+
+		if (autoSubmitEnabled && form.element) {
+			lastSubmittedSnapshot = snapshot(form.element)
+		}
 
 		const onSubmitOk = await runCallback(
 			onSubmit &&
@@ -418,6 +558,7 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 		// If cancelled, set the state and return early
 		if (cancelled) {
 			state = cancelledState
+			flushQueuedAutoSubmit()
 			return
 		}
 
@@ -459,6 +600,8 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 			}
 			if (!isCurrent()) return
 			await runCallback(onError && (() => onError({ ...context, error })))
+			if (!isCurrent()) return
+			flushQueuedAutoSubmit()
 			return
 		}
 
@@ -493,6 +636,9 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 			if (!isCurrent()) return
 			await runCallback(onIssues && (() => onIssues(context)))
 		}
+
+		if (!isCurrent()) return
+		flushQueuedAutoSubmit()
 	}
 
 	const resetState = () => {
@@ -508,7 +654,7 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 		resetState,
 		reset: () => {
 			resetState()
-			const element = remote.element
+			const element = attachedForm ?? remote.element
 			if (element) {
 				// Fires the form's reset event, which also clears validation state
 				// and discards the persisted draft

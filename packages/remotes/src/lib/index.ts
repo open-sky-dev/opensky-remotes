@@ -7,4 +7,4 @@ export type {
 	FormHandlers
 } from './form.svelte'
 export type { PersistOptions } from './persist.svelte'
-export type { FieldValidator, ValidationIssues } from './validation.svelte'
+export type { FieldValidator, ValidationHandlers, ValidationIssues } from './validation.svelte'

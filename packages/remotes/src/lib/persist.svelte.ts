@@ -188,7 +188,12 @@ export function createPersistCore(options: PersistCoreOptions) {
 			}
 
 			const draft = JSON.parse(raw) as Draft
-			if (!draft || typeof draft.savedAt !== 'number' || typeof draft.fields !== 'object') {
+			if (
+				!draft ||
+				typeof draft.savedAt !== 'number' ||
+				typeof draft.fields !== 'object' ||
+				draft.fields === null
+			) {
 				store.removeItem(options.storageKey)
 				return null
 			}
@@ -250,7 +255,7 @@ export function createPersistCore(options: PersistCoreOptions) {
 			const el = node
 
 			const draft = readDraft()
-			if (draft && key in draft.fields) {
+			if (draft && Object.hasOwn(draft.fields, key)) {
 				const value = draft.fields[key]
 				applyValue(el, value)
 				options.setKitField(path, coerceForKitState(el, value))

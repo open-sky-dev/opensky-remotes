@@ -403,11 +403,13 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 
 		return () => {
 			// A debounce pending at teardown is dropped — persistence holds the draft
-			clearAutoSubmitTimer()
-			autoSubmitQueued = false
-			attachedForm = null
 			node.removeEventListener('input', onInput)
 			node.removeEventListener('change', onChange)
+			if (attachedForm === node) {
+				clearAutoSubmitTimer()
+				autoSubmitQueued = false
+				attachedForm = null
+			}
 		}
 	}
 
@@ -517,6 +519,7 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 		let cancelled = false
 		let cancelledState: 'idle' | 'error' | 'issues' = 'idle'
 		let updateQueries: RemoteQueryUpdate[] = []
+		let updatesCalled = false
 
 		const context: EnhanceContext<TInput, TOutput> = { form }
 
@@ -541,6 +544,7 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 							cancelledState = cancelState ?? 'idle'
 						},
 						updates: (...queries: Array<RemoteQueryUpdate>) => {
+							updatesCalled = true
 							updateQueries = queries
 						}
 					}))
@@ -582,10 +586,7 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 
 		let valid: boolean
 		try {
-			valid =
-				updateQueries.length > 0
-					? await form.submit().updates(...updateQueries)
-					: await form.submit()
+			valid = updatesCalled ? await form.submit().updates(...updateQueries) : await form.submit()
 			clearTimers()
 		} catch (error) {
 			clearTimers()

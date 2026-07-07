@@ -89,14 +89,17 @@ const form = enhancedForm(myForm, {
 	timeoutMs: 3500, // unlocks the 'timeout' state and onTimeout callback
 
 	preventResetOnSuccess: true, // keep values after a successful submission (default: false)
-	// — or —
-	autoSubmit: true, // or { debounceMs: 600 } — mutually exclusive with preventResetOnSuccess
 
 	persist: {
 		key: 'my-form', // storage key (default: the remote form's action id)
 		storage: 'session', // 'local' (default) or 'session'
 		maxAgeMs: 86_400_000 // discard drafts older than this (default: no expiry)
 	}
+})
+
+// autoSubmit is mutually exclusive with preventResetOnSuccess
+const profileForm = enhancedForm(myForm, {
+	autoSubmit: true // or { debounceMs: 600 }
 })
 ```
 

@@ -34,6 +34,8 @@
 ### Fixed
 
 - Added a `default` condition to the package `exports` so non-Svelte-aware tooling (vitest, plain Node) can resolve the package.
+- Raised the `svelte` peer dependency to `^5.29.0` — the package imports `svelte/attachments`, which was introduced in that release.
+- Calling `updates()` with no arguments in `onSubmit` is now correctly forwarded to kit's `submit().updates()`, which suppresses the default `invalidateAll`. Previously, a zero-argument call was indistinguishable from not calling `updates()` at all.
 
 ## [0.1.0] - 2026-07-04
 

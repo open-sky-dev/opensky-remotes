@@ -1,3 +1,4 @@
+import type { RemoteFormEnhanceInstance, RemoteFormInput } from '@sveltejs/kit'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { enhancedForm } from '../lib/form.svelte'
 import { deferred, getAttachment, makeForm, makeInstance, makeRemote } from './helpers'
@@ -174,6 +175,23 @@ describe('submission state machine', () => {
 
 		expect(form.state).toBe('idle')
 		expect(input.value).toBe('')
+	})
+
+	it('calling updates() with zero arguments in onSubmit forwards to submit().updates()', async () => {
+		const form = enhancedForm(makeRemote())
+		const submission = Object.assign(Promise.resolve(true), {
+			updates: vi.fn(() => Promise.resolve(true))
+		})
+		const instance = {
+			element: makeForm(),
+			submit: () => submission,
+			result: undefined,
+			fields: {}
+		} as unknown as RemoteFormEnhanceInstance<RemoteFormInput, unknown>
+
+		await form.enhance(instance, { onSubmit: ({ updates }) => updates() })
+
+		expect(submission.updates).toHaveBeenCalledWith()
 	})
 })
 

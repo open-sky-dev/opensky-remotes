@@ -118,6 +118,21 @@ describe('restore', () => {
 		expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
 	})
 
+	it('discards a corrupt draft whose fields is an array and heals on the next write', () => {
+		localStorage.setItem(STORAGE_KEY, JSON.stringify({ savedAt: Date.now(), fields: [] }))
+		const { core, markDirty } = makeCore()
+		const input = makeInput('name')
+
+		attach(core, ['name'], input)
+		expect(markDirty).not.toHaveBeenCalled()
+
+		// A write against the corrupt draft must start fresh, not vanish into
+		// string-keyed array properties that JSON.stringify drops
+		input.value = 'healed'
+		input.dispatchEvent(new Event('change'))
+		expect(readDraftFields()).toEqual({ name: 'healed' })
+	})
+
 	it('restores a draft that has not expired yet', () => {
 		writeDraft({ name: 'fresh' }, Date.now() - 1_000)
 		const { core } = makeCore({ maxAgeMs: 5_000 })

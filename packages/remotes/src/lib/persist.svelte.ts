@@ -188,11 +188,14 @@ export function createPersistCore(options: PersistCoreOptions) {
 			}
 
 			const draft = JSON.parse(raw) as Draft
+			// fields must be a plain object: JSON.stringify drops string-keyed
+			// properties on arrays, so an array draft would swallow every write
 			if (
 				!draft ||
 				typeof draft.savedAt !== 'number' ||
 				typeof draft.fields !== 'object' ||
-				draft.fields === null
+				draft.fields === null ||
+				Array.isArray(draft.fields)
 			) {
 				store.removeItem(options.storageKey)
 				return null

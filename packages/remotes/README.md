@@ -9,7 +9,7 @@ Provides `enhancedForm`, a helper that improves the behaviors and experience of 
 - **Draft persistence** — opted-in fields save to web storage as the user types and restore after a reload
 - **Auto-submit** — the form submits itself once input settles, for save-button-less forms
 
-Requires `@sveltejs/kit` 2.68.0 or newer (targets the current remote form `enhance` instance API). Remote functions are experimental in SvelteKit, so your app must have them enabled in `svelte.config.js` (`kit.experimental.remoteFunctions`, plus `compilerOptions.experimental.async`).
+Requires `@sveltejs/kit` 2.68.0 or newer (targets the current remote form `enhance` instance API) and `svelte` 5.29 or newer (uses attachments). Remote functions are experimental in SvelteKit, so your app must have them enabled in `svelte.config.js` (`kit.experimental.remoteFunctions`, plus `compilerOptions.experimental.async`).
 
 ## Usage
 

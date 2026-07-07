@@ -15,6 +15,17 @@
 		autoSubmit: { debounceMs: 800 },
 		delayMs: 300
 	})
+
+	// `form.result` stays true until the next submission begins, so the page
+	// tracks typing itself — otherwise "Saved" would show over unsaved edits
+	// while the debounce settles
+	let editing = $state(false)
+
+	$effect(() => {
+		if (form.pending) {
+			editing = false
+		}
+	})
 </script>
 
 <svelte:head>
@@ -31,6 +42,7 @@
 	<form
 		{...form.handlers}
 		{...profileForm.preflight(profileSchema).enhance((instance) => form.enhance(instance))}
+		oninput={() => (editing = true)}
 	>
 		<label>
 			Display name
@@ -65,10 +77,12 @@
 		<p class="status" aria-live="polite">
 			{#if form.pending}
 				<span class="saving">Saving…</span>
-			{:else if form.result}
-				<span class="saved">Saved at {profileForm.result?.savedAt}</span>
 			{:else if form.issues}
 				<span class="error">Fix the highlighted fields to save</span>
+			{:else if editing}
+				<span class="saving">Unsaved changes — pausing will save them</span>
+			{:else if form.result}
+				<span class="saved">Saved at {profileForm.result?.savedAt}</span>
 			{:else}
 				<span class="idle">Changes save automatically</span>
 			{/if}

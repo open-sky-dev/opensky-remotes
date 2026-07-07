@@ -29,6 +29,9 @@ function rawRemoteSource(): Plugin {
 		load(id) {
 			if (id.startsWith(VIRTUAL_PREFIX)) {
 				const path = id.slice(VIRTUAL_PREFIX.length, -VIRTUAL_SUFFIX.length)
+				// The virtual id hides the real path from rollup — watch it explicitly
+				// so edits invalidate the module in dev
+				this.addWatchFile(path)
 				return `export default ${JSON.stringify(readFileSync(path, 'utf-8'))}`
 			}
 		}

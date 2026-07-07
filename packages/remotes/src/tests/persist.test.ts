@@ -42,6 +42,22 @@ function makeInput(name: string, form?: HTMLFormElement) {
 	return input
 }
 
+/**
+ * A kit-style checkbox group: same `name[]`-suffixed name, one value each,
+ * all inside a form (group members find each other via el.form)
+ */
+function makeCheckboxGroup(name: string, values: string[]) {
+	const form = document.createElement('form')
+	document.body.appendChild(form)
+
+	return values.map((value) => {
+		const box = makeInput(`${name}[]`, form)
+		box.type = 'checkbox'
+		box.value = value
+		return box
+	})
+}
+
 function attach(core: ReturnType<typeof makeCore>['core'], path: string[], el: Element) {
 	return getAttachment(core.attachment(path))(el)
 }
@@ -123,6 +139,35 @@ describe('restore', () => {
 		expect(checkbox.checked).toBe(true)
 		expect(setKitField).toHaveBeenCalledWith(['agree'], true)
 	})
+
+	it('restores a checkbox group by membership', () => {
+		writeDraft({ interests: ['music'] })
+		const { core, setKitField } = makeCore()
+		const [music, sports] = makeCheckboxGroup('interests', ['music', 'sports'])
+
+		attach(core, ['interests'], music)
+		attach(core, ['interests'], sports)
+
+		expect(music.checked).toBe(true)
+		expect(sports.checked).toBe(false)
+		expect(setKitField).toHaveBeenCalledWith(['interests'], ['music'])
+	})
+
+	it('coerces restored values into kit state using the name type prefix', () => {
+		writeDraft({ stars: '4', subscribed: 'true' })
+		const { core, setKitField } = makeCore()
+
+		const stars = makeInput('n:stars')
+		stars.type = 'number'
+		attach(core, ['stars'], stars)
+
+		const subscribed = makeInput('b:subscribed')
+		attach(core, ['subscribed'], subscribed)
+
+		expect(stars.value).toBe('4')
+		expect(setKitField).toHaveBeenCalledWith(['stars'], 4)
+		expect(setKitField).toHaveBeenCalledWith(['subscribed'], true)
+	})
 })
 
 describe('saving', () => {
@@ -161,6 +206,26 @@ describe('saving', () => {
 		checkbox.dispatchEvent(new Event('change'))
 
 		expect(readDraftFields()).toEqual({ agree: true })
+	})
+
+	it('saves a checkbox group as the array of selected values', () => {
+		const { core } = makeCore()
+		const [music, sports, travel] = makeCheckboxGroup('interests', ['music', 'sports', 'travel'])
+		attach(core, ['interests'], music)
+		attach(core, ['interests'], sports)
+		attach(core, ['interests'], travel)
+
+		music.checked = true
+		music.dispatchEvent(new Event('change'))
+		expect(readDraftFields()).toEqual({ interests: ['music'] })
+
+		sports.checked = true
+		sports.dispatchEvent(new Event('change'))
+		expect(readDraftFields()).toEqual({ interests: ['music', 'sports'] })
+
+		music.checked = false
+		music.dispatchEvent(new Event('change'))
+		expect(readDraftFields()).toEqual({ interests: ['sports'] })
 	})
 
 	it('multiple fields share one draft', () => {

@@ -45,6 +45,32 @@ function isPersistedElement(node: Element): node is PersistedElement {
 }
 
 /**
+ * Kit renders a checkbox-array field (`as('checkbox', value)`) as several
+ * same-named checkboxes with a `[]` name suffix; single boolean checkboxes
+ * are named `b:key` instead. The group is one `string[]` field.
+ */
+function isGroupCheckbox(el: HTMLInputElement) {
+	return el.type === 'checkbox' && el.name.endsWith('[]')
+}
+
+/**
+ * The currently selected values across a checkbox group — the shape kit
+ * itself uses for the field
+ */
+function groupValues(el: HTMLInputElement): string[] {
+	const members = el.form
+		? Array.from(el.form.elements).filter(
+				(member): member is HTMLInputElement =>
+					member instanceof HTMLInputElement &&
+					member.type === 'checkbox' &&
+					member.name === el.name
+			)
+		: [el]
+
+	return members.filter((box) => box.checked).map((box) => box.value)
+}
+
+/**
  * Reads an element's current value in the shape we store. Returns undefined
  * for values that can't or shouldn't be captured (unchecked radios, files).
  */
@@ -55,7 +81,9 @@ function readValue(el: PersistedElement): unknown {
 
 	if (el instanceof HTMLInputElement) {
 		if (el.type === 'checkbox') {
-			return el.checked
+			// A value-carrying group is one string[] field — store the selected
+			// values, not this element's checked flag
+			return isGroupCheckbox(el) ? groupValues(el) : el.checked
 		}
 		if (el.type === 'radio') {
 			return el.checked ? el.value : undefined
@@ -84,6 +112,10 @@ function applyValue(el: PersistedElement, value: unknown) {
 
 	if (el instanceof HTMLInputElement) {
 		if (el.type === 'checkbox') {
+			if (isGroupCheckbox(el)) {
+				el.checked = Array.isArray(value) && value.map(String).includes(el.value)
+				return
+			}
 			el.checked = value === true
 			return
 		}
@@ -97,6 +129,29 @@ function applyValue(el: PersistedElement, value: unknown) {
 	}
 
 	el.value = value == null ? '' : String(value)
+}
+
+/**
+ * Kit encodes a field's type in the input name (`n:count` for numbers,
+ * `b:agree` for booleans) so it can coerce FormData's strings back to typed
+ * values. Mirror that coercion when restoring a stored string into kit's
+ * field state, so validators and `fields.value()` see the right type.
+ */
+function coerceForKitState(el: PersistedElement, value: unknown): unknown {
+	if (typeof value !== 'string') {
+		return value
+	}
+
+	if (el.name.startsWith('n:')) {
+		const numeric = Number(value)
+		return Number.isNaN(numeric) ? value : numeric
+	}
+
+	if (el.name.startsWith('b:')) {
+		return value === 'true'
+	}
+
+	return value
 }
 
 export type PersistCore = ReturnType<typeof createPersistCore>
@@ -198,7 +253,7 @@ export function createPersistCore(options: PersistCoreOptions) {
 			if (draft && key in draft.fields) {
 				const value = draft.fields[key]
 				applyValue(el, value)
-				options.setKitField(path, value)
+				options.setKitField(path, coerceForKitState(el, value))
 				options.markDirty(path)
 			}
 

@@ -2,17 +2,30 @@
 
 ## [1.0.0] - 2026-07-07
 
+**This release is a breaking rewrite of the entire public API.** The two creators from 0.1.0 are gone and every spread and option name changed with them — existing code will not compile until migrated. The mapping:
+
+| 0.1.0 | 1.0.0 |
+| --- | --- |
+| `createValidation(remote)` + `createEnhancedForm(remote, { validation, ... })` | `enhancedForm(remote, { ... })` — one object, validation always wired in |
+| `{...valid.formHandler}` on the `<form>` | `{...form.handlers}` |
+| `{...valid.fields.x.handlers}` on inputs | `{...form.fields.x.validate}` |
+| `valid.fields.x.issues` / `.pending` / `.addIssues` / `.addValidator` | same names, now on `form.fields.x` |
+| `resetOnSuccess: false` | `preventResetOnSuccess: true` |
+| `enhanced.reset()` (state only) | `form.resetState()` — `form.reset()` now also resets the form element |
+| `valid.updateIssues()` / `valid.validateAll()` in enhance callbacks | delete them — the lifecycle wiring is internal now |
+
+### Changed
+
+- **BREAKING**: Merged `createValidation` and `createEnhancedForm` into a single `enhancedForm` export — one object, one field proxy, one form-level spread. The `validation` option is gone: validation is always wired into the submission lifecycle, so the manual `updateIssues()`/`validateAll()` calls previously required in enhance handlers (and the silent miswiring when `validation` wasn't passed) no longer exist. `updateIssues()` is now internal; `validateAll()`, `clearAllIssues()`, `allIssues`, `allKnownIssues`, and `formIssues` remain on the merged object.
+- **BREAKING**: The field spread `fields.some.path.handlers` is now `fields.some.path.validate`, and the form-level spread `formHandler` is now `handlers`.
+- **BREAKING**: Replaced `resetOnSuccess` (default `true`) with the opt-in `preventResetOnSuccess` (default `false`), so keeping values after a successful save is something you opt into rather than out of. `resetOnSuccess: false` becomes `preventResetOnSuccess: true`.
+- **BREAKING**: `reset()` now resets the form element as well as the submission state. For the old behavior (state only), use `resetState()`.
+
 ### Added
 
 - Added draft persistence. Spread `form.fields.some.path.persist` onto an input and its value is saved to web storage as the user types (debounced, flushed on `change`) and restored when the input mounts — so a reload no longer loses what was typed. Restored fields are marked dirty. Drafts are discarded on successful submission, on form reset, on expiry, or via the new `discardPersisted()`. The `persist` creation option overrides defaults: `key` (defaults to the remote form's action id, which is stable across reloads/builds and self-invalidates when the remote function moves), `storage` (`'local'` default, or `'session'`), and `maxAgeMs` (default: no expiry). File inputs are skipped.
 - Added `autoSubmit: boolean | { debounceMs?: number }` (default 600ms) — the form submits itself via `requestSubmit()` once input settles, for save-button-less forms. Preflight validation, the submit-attempt issue display, and enhance callbacks all run as they would for a button press. Built in: data identical to the last submission is never re-submitted, a debounce firing mid-submission waits and re-submits only if the data changed since, and a `change` event (text blur, select/checkbox pick) submits immediately. Auto-submitting forms never reset after success, so `preventResetOnSuccess` is not accepted alongside `autoSubmit` (type error).
 - Added `reset()` (resets the form element and the submission state — the reset event also clears validation state and discards the persisted draft) alongside `resetState()`, which is the old state-only reset.
-
-### Changed
-
-- **BREAKING**: Merged `createValidation` and `createEnhancedForm` into a single `enhancedForm` export — one object, one field proxy, one form-level spread. The `validation` option is gone: validation is always wired into the submission lifecycle, so the manual `updateIssues()`/`validateAll()` calls previously required in enhance handlers (and the silent miswiring when `validation` wasn't passed) no longer exist. `updateIssues()` is now internal; `validateAll()`, `clearAllIssues()`, `allIssues`, `allKnownIssues`, and `formIssues` remain on the merged object. Migration: replace both creators with `enhancedForm(remote, options)`, spread `form.handlers` on the `<form>` (was `valid.formHandler`), and use `form.fields.some.path.validate` on inputs (was `valid.fields.some.path.handlers`).
-- **BREAKING**: Replaced `resetOnSuccess` (default `true`) with the opt-in `preventResetOnSuccess` (default `false`), so keeping values after a successful save is something you opt into rather than out of. `resetOnSuccess: false` becomes `preventResetOnSuccess: true`.
-- **BREAKING**: `reset()` now resets the form element as well as the submission state. For the old behavior (state only), use `resetState()`.
 
 ### Changed (internal)
 

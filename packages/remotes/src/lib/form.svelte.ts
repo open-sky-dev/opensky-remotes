@@ -5,6 +5,13 @@ import type {
 	RemoteQueryUpdate
 } from '@sveltejs/kit'
 import { tick } from 'svelte'
+import {
+	createValidationCore,
+	type FieldValidator,
+	type PrimitiveFieldValue,
+	type ValidationHandlers,
+	type ValidationIssues
+} from './validation.svelte'
 
 /**
  * Base form state (always present)
@@ -28,33 +35,21 @@ type EnhanceContext<TInput extends RemoteFormInput | void, TOutput> = {
 }
 
 /**
- * Optional validation integration for form validation
- */
-type Validation = {
-	/** Updates validation issues for all registered fields */
-	updateIssues: () => void | Promise<void>
-	/** Validates all registered fields */
-	validateAll: () => void | Promise<void>
-}
-
-/**
  * Options available regardless of delay/timeout configuration
  */
 type CommonOptions = {
-	/** Optional validation instance from createValidation for form validation integration */
-	validation?: Validation
-	/** Whether to reset the `<form>` element after a successful submission (default: true) */
-	resetOnSuccess?: boolean
+	/** Milliseconds to wait before transitioning to 'delayed' state */
+	delayMs?: number
+	/** Milliseconds to wait before transitioning to 'timeout' state */
+	timeoutMs?: number
 }
 
 /**
  * Options for creating an enhanced form
  */
-type CreateEnhancedFormOptions = CommonOptions & {
-	/** Milliseconds to wait before transitioning to 'delayed' state */
-	delayMs?: number
-	/** Milliseconds to wait before transitioning to 'timeout' state */
-	timeoutMs?: number
+export type EnhancedFormOptions = CommonOptions & {
+	/** Keep the form's values after a successful submission instead of resetting (default: false) */
+	preventResetOnSuccess?: boolean
 }
 
 /**
@@ -114,21 +109,69 @@ type Callbacks<
 		: { onTimeout?: never })
 
 /**
+ * The spread for the `<form>` element: submit-attempt issue display and
+ * validation clearing on reset
+ */
+export type FormHandlers = {
+	onsubmitcapture: () => Promise<void>
+	onreset: () => void
+}
+
+type FieldValue<T, K extends PropertyKey> = T extends unknown
+	? K extends keyof T
+		? T[K]
+		: never
+	: never
+
+/**
+ * Per-field surface: the spread to opt into validation, plus issue accessors
+ * and custom issue/validator management
+ */
+export type FormField<TValue = unknown> = {
+	/** Spread onto the input to opt it into validation (onblur/oninput) */
+	validate: ValidationHandlers
+	issues: string[] | null
+	pending: boolean
+	addIssues: (issues: string | string[]) => void
+	removeIssue: (issue: string) => void
+	clearIssues: () => void
+	addValidator: (validator: FieldValidator<TValue>) => () => void
+}
+
+export type FormFields<T> = [T] extends [void]
+	? FormField
+	: NonNullable<T> extends PrimitiveFieldValue
+		? FormField<NonNullable<T>>
+		: [NonNullable<T>] extends [Array<infer Item>]
+			? FormField<NonNullable<T>> & {
+					[index: number]: FormFields<Item>
+				}
+			: FormField<NonNullable<T>> & {
+					[K in keyof NonNullable<T>]-?: FormFields<FieldValue<NonNullable<T>, K>>
+				}
+
+/**
  * Enhanced form return type, conditionally including delayed/timeout state based on creation options
  */
-type EnhancedForm<
+export type EnhancedForm<
 	TInput extends RemoteFormInput | void,
 	TOutput,
 	HasDelay extends boolean,
 	HasTimeout extends boolean
 > = {
+	/** Spread onto the `<form>` element */
+	handlers: FormHandlers
+	/** Type-safe per-field helpers mirroring the remote form's field shape */
+	fields: FormFields<TInput>
 	/** Form enhancement handler — pass the instance received from the remote form's enhance callback */
 	enhance: (
 		form: RemoteFormEnhanceInstance<TInput, TOutput>,
 		callbacks?: Callbacks<TInput, TOutput, HasDelay, HasTimeout>
 	) => Promise<void>
-	/** Resets the form state back to 'idle' and stops any in-flight submission from updating state */
+	/** Resets the form element and the submission state */
 	reset: () => void
+	/** Resets only the submission state back to 'idle', leaving the form's values alone */
+	resetState: () => void
 	/** Current form state (exclusive — exactly one state at a time) */
 	state:
 		| BaseFormState
@@ -140,6 +183,16 @@ type EnhancedForm<
 	issues: boolean
 	error: boolean
 	result: boolean
+	/** All currently displayed validation issues as a nested tree (form-level issues under the '' key) */
+	allIssues: ValidationIssues
+	/** Debugging view: every issue currently known, whether displayed or not */
+	allKnownIssues: ValidationIssues
+	/** Form-level issues — issues without a field path, e.g. from `invalid('message')` on the server */
+	formIssues: string[] | null
+	/** Clears all validation issues and dirty tracking */
+	clearAllIssues: () => void
+	/** Validates all registered fields with the server (including untouched fields), then updates issues */
+	validateAll: () => Promise<void>
 } & (HasDelay extends true
 	? {
 			/** True once a submission exceeds delayMs — stays true through 'timeout', implies pending */
@@ -154,17 +207,19 @@ type EnhancedForm<
 		: unknown)
 
 /**
- * Creates an enhanced form with reactive state management and lifecycle callbacks
+ * Creates an enhanced form: submission state tracking with semantic callbacks
+ * and inline validation around a SvelteKit remote form function.
  * @param remote - The remote form function
- * @param options - Optional configuration including validation integration, delayMs, timeoutMs, and resetOnSuccess
- * @returns An object with enhance handler and reactive state getters (conditionally includes delayed/timeout based on options)
+ * @param options - Optional configuration (timings, preventResetOnSuccess)
+ * @returns An object with the form-level `handlers` spread, per-field helpers,
+ * the `enhance` handler, and reactive state getters (delayed/timeout only when configured)
  */
-export function createEnhancedForm<
+export function enhancedForm<
 	TInput extends RemoteFormInput | void,
 	TOutput,
 	// The inferred options type determines which delayed/timeout state and
 	// callbacks exist — passing delayMs unlocks 'delayed' and onDelay, etc.
-	TOptions extends CreateEnhancedFormOptions = Record<never, never>
+	TOptions extends EnhancedFormOptions = Record<never, never>
 >(
 	remote: RemoteForm<TInput, TOutput>,
 	options?: TOptions
@@ -174,12 +229,15 @@ export function createEnhancedForm<
 	TOptions extends { delayMs: number } ? true : false,
 	TOptions extends { timeoutMs: number } ? true : false
 >
-export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutput>(
-	// remote is unused at runtime but anchors TInput/TOutput inference
+export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 	remote: RemoteForm<TInput, TOutput>,
-	options: CreateEnhancedFormOptions = {}
+	options: EnhancedFormOptions = {}
 ): EnhancedForm<TInput, TOutput, boolean, boolean> {
-	const { validation, delayMs, timeoutMs, resetOnSuccess = true } = options
+	const { delayMs, timeoutMs } = options
+
+	const resetOnSuccess = !options.preventResetOnSuccess
+
+	const validation = createValidationCore(remote)
 
 	let state = $state<FormState>('idle')
 
@@ -187,6 +245,65 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 	// while it hasn't been superseded by a newer submission or a reset()) may
 	// write state, fire callbacks, or reset the form
 	let latestSubmission = 0
+
+	const handlers: FormHandlers = {
+		// Shows blocking preflight issues even when SvelteKit blocks the
+		// submission before the enhance callback runs
+		onsubmitcapture: validation.validateSubmitAttempt,
+		// Kit clears its issues and touched state on form reset; clear ours too
+		onreset: validation.clearAllIssues
+	}
+
+	// --- fields proxy ---
+
+	function createFieldProxy(path: string[]): FormField {
+		return new Proxy(
+			{},
+			{
+				get(_, property) {
+					if (typeof property === 'symbol') {
+						return undefined
+					}
+
+					if (property === 'validate') {
+						return validation.validate(path)
+					}
+
+					if (property === 'issues') {
+						validation.registerPath(path)
+						return validation.issuesFor(path)
+					}
+
+					if (property === 'pending') {
+						validation.registerPath(path)
+						return validation.isPending(path)
+					}
+
+					if (property === 'addIssues') {
+						return (issues: string | string[]) => validation.addIssues(path, issues)
+					}
+
+					if (property === 'removeIssue') {
+						return (issue: string) => validation.removeIssue(path, issue)
+					}
+
+					if (property === 'clearIssues') {
+						return () => validation.clearIssues(path)
+					}
+
+					if (property === 'addValidator') {
+						return (validator: FieldValidator<unknown>) => validation.addValidator(path, validator)
+					}
+
+					return createFieldProxy([...path, property])
+				}
+			}
+		) as FormField
+	}
+
+	const fields = createFieldProxy([]) as FormFields<TInput>
+
+	// --- submission lifecycle ---
 
 	/**
 	 * Runs a user callback, reporting errors instead of letting them escape:
@@ -199,7 +316,7 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 			await run?.()
 			return true
 		} catch (error) {
-			console.error('[createEnhancedForm] Error thrown by form callback:', error)
+			console.error('[enhancedForm] Error thrown by form callback:', error)
 			return false
 		}
 	}
@@ -290,7 +407,7 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 
 			state = 'error'
 			try {
-				await validation?.validateAll()
+				await validation.validateAll()
 			} catch {
 				// A failed re-validation shouldn't mask the original error
 			}
@@ -320,7 +437,7 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 		} else {
 			state = 'issues'
 			try {
-				await validation?.updateIssues()
+				await validation.updateIssues()
 			} catch {
 				// A failed issue refresh shouldn't escape the enhance callback
 				// (SvelteKit would navigate to the nearest error page)
@@ -330,12 +447,24 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 		}
 	}
 
+	const resetState = () => {
+		// Invalidate any in-flight submission so it can't write state later
+		latestSubmission++
+		state = 'idle'
+	}
+
 	return {
+		handlers,
+		fields,
 		enhance,
+		resetState,
 		reset: () => {
-			// Invalidate any in-flight submission so it can't write state later
-			latestSubmission++
-			state = 'idle'
+			resetState()
+			const element = remote.element
+			if (element) {
+				// Fires the form's reset event, which also clears validation state
+				HTMLFormElement.prototype.reset.call(element)
+			}
 		},
 		get state() {
 			return state
@@ -360,7 +489,18 @@ export function createEnhancedForm<TInput extends RemoteFormInput | void, TOutpu
 		},
 		get result() {
 			return state === 'result'
-		}
+		},
+		get allIssues() {
+			return validation.allIssues
+		},
+		get allKnownIssues() {
+			return validation.allKnownIssues
+		},
+		get formIssues() {
+			return validation.formIssues
+		},
+		clearAllIssues: validation.clearAllIssues,
+		validateAll: validation.validateAll
 		// The widened implementation signature erases the delayed/timeout getters,
 		// which always exist at runtime — assert the fully-equipped shape
 	} as EnhancedForm<TInput, TOutput, true, true>

@@ -4,14 +4,9 @@ export type ValidationIssues = {
 	[key: string]: string[] | null | ValidationIssues
 }
 
-type ValidationHandlers = {
+export type ValidationHandlers = {
 	onblur: () => Promise<void>
 	oninput: () => Promise<void>
-}
-
-type ValidationFormHandler = {
-	onsubmitcapture: () => Promise<void>
-	onreset: () => void
 }
 
 type FieldWithIssues = {
@@ -40,53 +35,19 @@ export type FieldValidator<TValue = unknown> = (
 	context: FieldValidatorContext<TValue>
 ) => ValidatorResult | Promise<ValidatorResult>
 
-type FieldValue<T, K extends PropertyKey> = T extends unknown
-	? K extends keyof T
-		? T[K]
-		: never
-	: never
+export type PrimitiveFieldValue = PrimitiveField
 
-export type ValidationField<TValue = unknown> = {
-	handlers: ValidationHandlers
-	issues: string[] | null
-	pending: boolean
-	addIssues: (issues: string | string[]) => void
-	removeIssue: (issue: string) => void
-	clearIssues: () => void
-	addValidator: (validator: FieldValidator<TValue>) => () => void
-}
-
-export type ValidationFields<T> = [T] extends [void]
-	? ValidationField
-	: NonNullable<T> extends PrimitiveField
-		? ValidationField<NonNullable<T>>
-		: [NonNullable<T>] extends [Array<infer Item>]
-			? ValidationField<NonNullable<T>> & {
-					[index: number]: ValidationFields<Item>
-				}
-			: ValidationField<NonNullable<T>> & {
-					[K in keyof NonNullable<T>]-?: ValidationFields<FieldValue<NonNullable<T>, K>>
-				}
-
-export type Validation<TInput extends RemoteFormInput | void = RemoteFormInput> = {
-	formHandler: ValidationFormHandler
-	fields: ValidationFields<TInput>
-	allIssues: ValidationIssues
-	allKnownIssues: ValidationIssues
-	formIssues: string[] | null
-	clearAllIssues: () => void
-	validateAll: () => Promise<void>
-	updateIssues: () => Promise<void>
-}
+export type ValidationCore = ReturnType<typeof createValidationCore>
 
 /**
- * Creates a validation helper for a form with reactive state management
- * @param form - The RemoteForm object from createRemote
- * @returns An object with methods to validate and access validation issues
+ * Internal validation engine: issue layers, dirty tracking, debounced remote
+ * validation, and per-field operations keyed by field path. The public field
+ * proxy and form-level handlers are assembled by `enhancedForm`.
+ * @param form - The remote form function
  */
-export function createValidation<TInput extends RemoteFormInput | void, TOutput>(
+export function createValidationCore<TInput extends RemoteFormInput | void, TOutput>(
 	form: RemoteForm<TInput, TOutput>
-): Validation<TInput> {
+) {
 	// Issue stores: one flat record per layer, keyed by the dot-joined field path.
 	// A field's displayed issues are merged from the layers on read, and the
 	// allIssues tree is derived — the layers are the only sources of truth.
@@ -610,61 +571,19 @@ export function createValidation<TInput extends RemoteFormInput | void, TOutput>
 		}
 	}
 
-	function createFieldProxy(path: string[]): ValidationField {
-		return new Proxy(
-			{},
-			{
-				get(_, property) {
-					if (typeof property === 'symbol') {
-						return undefined
-					}
-
-					if (property === 'handlers') {
-						return handlers(path)
-					}
-
-					if (property === 'issues') {
-						registerPath(path)
-						return issuesFor(path)
-					}
-
-					if (property === 'pending') {
-						registerPath(path)
-						return isPending(path)
-					}
-
-					if (property === 'addIssues') {
-						return (issues: string | string[]) => addIssues(path, issues)
-					}
-
-					if (property === 'removeIssue') {
-						return (issue: string) => removeIssue(path, issue)
-					}
-
-					if (property === 'clearIssues') {
-						return () => clearIssues(path)
-					}
-
-					if (property === 'addValidator') {
-						return (validator: FieldValidator<unknown>) => addValidator(path, validator)
-					}
-
-					return createFieldProxy([...path, property])
-				}
-			}
-		) as ValidationField
-	}
-
-	const fields = createFieldProxy([]) as ValidationFields<TInput>
-	const formHandler: ValidationFormHandler = {
-		onsubmitcapture: validateSubmitAttempt,
-		// Kit clears its issues and touched state on form reset; clear ours too
-		onreset: clearAllIssues
-	}
-
 	return {
-		formHandler,
-		fields,
+		// Per-field operations, keyed by field path
+		validate: handlers,
+		issuesFor,
+		isPending,
+		addIssues,
+		removeIssue,
+		clearIssues,
+		addValidator,
+		registerPath,
+		markDirty,
+		// Form-level operations
+		validateSubmitAttempt,
 		get allIssues() {
 			return issueTree
 		},

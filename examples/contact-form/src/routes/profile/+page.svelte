@@ -16,10 +16,21 @@
 		delayMs: 300
 	})
 
+	const initialProfile = {
+		displayName: 'Ada Lovelace',
+		bio: 'Wrote the first computer program.'
+	}
+
 	// `form.result` stays true until the next submission begins, so the page
-	// tracks typing itself — otherwise "Saved" would show over unsaved edits
-	// while the debounce settles
+	// tracks unsaved edits itself by comparing against the last saved values —
+	// otherwise "Saved" would show over unsaved edits while the debounce settles
+	let saved = $state(initialProfile)
 	let editing = $state(false)
+
+	function checkEditing(element: HTMLFormElement) {
+		const data = new FormData(element)
+		editing = data.get('displayName') !== saved.displayName || data.get('bio') !== saved.bio
+	}
 
 	$effect(() => {
 		if (form.pending) {
@@ -41,8 +52,14 @@
 
 	<form
 		{...form.handlers}
-		{...profileForm.preflight(profileSchema).enhance((instance) => form.enhance(instance))}
-		oninput={() => (editing = true)}
+		{...profileForm.preflight(profileSchema).enhance((instance) =>
+			form.enhance(instance, {
+				onReturn: ({ form: submitted }) => {
+					saved = submitted.fields.value()
+				}
+			})
+		)}
+		oninput={(event) => checkEditing(event.currentTarget)}
 	>
 		<label>
 			Display name

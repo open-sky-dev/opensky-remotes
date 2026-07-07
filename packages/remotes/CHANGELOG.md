@@ -4,15 +4,15 @@
 
 **This release is a breaking rewrite of the entire public API.** The two creators from 0.1.0 are gone and every spread and option name changed with them — existing code will not compile until migrated. The mapping:
 
-| 0.1.0 | 1.0.0 |
-| --- | --- |
+| 0.1.0                                                                          | 1.0.0                                                                    |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
 | `createValidation(remote)` + `createEnhancedForm(remote, { validation, ... })` | `enhancedForm(remote, { ... })` — one object, validation always wired in |
-| `{...valid.formHandler}` on the `<form>` | `{...form.handlers}` |
-| `{...valid.fields.x.handlers}` on inputs | `{...form.fields.x.validate}` |
-| `valid.fields.x.issues` / `.pending` / `.addIssues` / `.addValidator` | same names, now on `form.fields.x` |
-| `resetOnSuccess: false` | `preventResetOnSuccess: true` |
-| `enhanced.reset()` (state only) | `form.resetState()` — `form.reset()` now also resets the form element |
-| `valid.updateIssues()` / `valid.validateAll()` in enhance callbacks | delete them — the lifecycle wiring is internal now |
+| `{...valid.formHandler}` on the `<form>`                                       | `{...form.handlers}`                                                     |
+| `{...valid.fields.x.handlers}` on inputs                                       | `{...form.fields.x.validate}`                                            |
+| `valid.fields.x.issues` / `.pending` / `.addIssues` / `.addValidator`          | same names, now on `form.fields.x`                                       |
+| `resetOnSuccess: false`                                                        | `preventResetOnSuccess: true`                                            |
+| `enhanced.reset()` (state only)                                                | `form.resetState()` — `form.reset()` now also resets the form element    |
+| `valid.updateIssues()` / `valid.validateAll()` in enhance callbacks            | delete them — the lifecycle wiring is internal now                       |
 
 ### Changed
 

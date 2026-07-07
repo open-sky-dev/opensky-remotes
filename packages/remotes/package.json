@@ -2,6 +2,7 @@
 	"name": "@opensky/remotes",
 	"scripts": {
 		"check": "svelte-kit sync && tsc --noEmit --project ./tsconfig.json",
+		"test": "vitest run",
 		"format": "oxfmt .",
 		"lint": "oxfmt --check . && eslint .",
 		"dev": "bun run build && bun link",
@@ -33,12 +34,14 @@
 		"eslint": "^10.6.0",
 		"eslint-plugin-svelte": "^3.20.0",
 		"globals": "^17.7.0",
+		"jsdom": "^29.1.1",
 		"oxfmt": "^0.57.0",
 		"publint": "^0.3.21",
 		"svelte": "^5.56.4",
 		"typescript": "^6.0.3",
 		"typescript-eslint": "^8.62.1",
-		"vite": "^8.1.3"
+		"vite": "^8.1.3",
+		"vitest": "^4.1.9"
 	},
 	"exports": {
 		".": {

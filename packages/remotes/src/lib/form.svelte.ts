@@ -398,13 +398,32 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 			fireAutoSubmit()
 		}
 
+		// Snapshot at submit-event time — the same moment kit captures its
+		// FormData — so input arriving during an async preflight can't be
+		// recorded as submitted without actually being sent
+		const onSubmit = () => {
+			lastSubmittedSnapshot = snapshot(node)
+		}
+
+		// A reset invalidates whatever the debounce was about to submit —
+		// without this, the debounce fires after the reset and auto-submits
+		// the freshly-emptied form
+		const onReset = () => {
+			clearAutoSubmitTimer()
+			autoSubmitQueued = false
+		}
+
 		node.addEventListener('input', onInput)
 		node.addEventListener('change', onChange)
+		node.addEventListener('submit', onSubmit)
+		node.addEventListener('reset', onReset)
 
 		return () => {
 			// A debounce pending at teardown is dropped — persistence holds the draft
 			node.removeEventListener('input', onInput)
 			node.removeEventListener('change', onChange)
+			node.removeEventListener('submit', onSubmit)
+			node.removeEventListener('reset', onReset)
 			if (attachedForm === node) {
 				clearAutoSubmitTimer()
 				autoSubmitQueued = false
@@ -530,10 +549,6 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 
 		state = 'pending'
 
-		if (autoSubmitEnabled && form.element) {
-			lastSubmittedSnapshot = snapshot(form.element)
-		}
-
 		const onSubmitOk = await runCallback(
 			onSubmit &&
 				(() =>
@@ -556,6 +571,7 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 		// don't submit
 		if (!onSubmitOk) {
 			state = 'error'
+			flushQueuedAutoSubmit()
 			return
 		}
 
@@ -646,6 +662,8 @@ export function enhancedForm<TInput extends RemoteFormInput | void, TOutput>(
 		// Invalidate any in-flight submission so it can't write state later
 		latestSubmission++
 		state = 'idle'
+		// The invalidated submission can no longer flush a queued auto-submit
+		autoSubmitQueued = false
 	}
 
 	return {

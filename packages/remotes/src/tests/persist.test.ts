@@ -284,6 +284,39 @@ describe('discarding', () => {
 		expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
 	})
 
+	it('discard() cancels pending debounced writes', async () => {
+		vi.useFakeTimers()
+		const { core } = makeCore()
+		const input = makeInput('name')
+		attach(core, ['name'], input)
+
+		// A write scheduled just before a successful submission's discard must
+		// not fire afterwards and resurrect the stale draft
+		input.value = 'typed just before submit'
+		input.dispatchEvent(new Event('input'))
+		core.discard()
+
+		await vi.advanceTimersByTimeAsync(300)
+		expect(readDraftFields()).toBeNull()
+	})
+
+	it('input after a discard starts a fresh draft', async () => {
+		vi.useFakeTimers()
+		const { core } = makeCore()
+		const input = makeInput('name')
+		attach(core, ['name'], input)
+
+		input.value = 'old'
+		input.dispatchEvent(new Event('input'))
+		core.discard()
+
+		input.value = 'new draft'
+		input.dispatchEvent(new Event('input'))
+		await vi.advanceTimersByTimeAsync(300)
+
+		expect(readDraftFields()).toEqual({ name: 'new draft' })
+	})
+
 	it('a detached field stops writing', async () => {
 		vi.useFakeTimers()
 		const { core } = makeCore()

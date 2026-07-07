@@ -226,7 +226,12 @@ export function createPersistCore(options: PersistCoreOptions) {
 		}
 	}
 
+	// Debounced writes scheduled before a discard must not fire afterwards —
+	// they would resurrect the stale draft after a successful submission
+	let writeGeneration = 0
+
 	function discard() {
+		writeGeneration++
 		try {
 			getStore()?.removeItem(options.storageKey)
 		} catch {
@@ -274,7 +279,15 @@ export function createPersistCore(options: PersistCoreOptions) {
 
 			const onInput = () => {
 				if (timer) clearTimeout(timer)
-				timer = setTimeout(write, WRITE_DEBOUNCE_MS)
+				const scheduled = writeGeneration
+				timer = setTimeout(() => {
+					timer = null
+					// Invalidated by a discard() while pending — input after the
+					// discard schedules at the new generation and still writes
+					if (scheduled === writeGeneration) {
+						write()
+					}
+				}, WRITE_DEBOUNCE_MS)
 			}
 
 			const onChange = () => {

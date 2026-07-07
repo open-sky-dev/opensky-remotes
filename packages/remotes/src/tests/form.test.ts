@@ -266,7 +266,8 @@ describe('autoSubmit', () => {
 	it('never re-submits data identical to the last submission', async () => {
 		const { form, element, requestSubmit } = setup()
 
-		// A submission captures the snapshot of what was submitted
+		// The submit event captures the snapshot of what was submitted
+		element.dispatchEvent(new Event('submit'))
 		await form.enhance(makeInstance({ element, submit: async () => true }))
 		expect(form.state).toBe('result')
 
@@ -297,6 +298,62 @@ describe('autoSubmit', () => {
 		await enhancePromise
 
 		// The queued auto-submit fires now that the submission settled
+		expect(requestSubmit).toHaveBeenCalledOnce()
+	})
+
+	it('input during an in-flight submission is not recorded as submitted', async () => {
+		const { form, element, requestSubmit } = setup()
+		const input = element.elements.namedItem('a') as HTMLInputElement
+
+		// Kit captures its FormData when the submit event fires...
+		input.value = 'submitted value'
+		element.dispatchEvent(new Event('submit'))
+		// ...but input can arrive before the enhance callback runs (async preflight)
+		type(element, 'typed during preflight')
+
+		const submit = deferred<boolean>()
+		const enhancePromise = form.enhance(makeInstance({ element, submit: () => submit.promise }))
+
+		await vi.advanceTimersByTimeAsync(600) // debounce fires mid-flight → queued
+		expect(requestSubmit).not.toHaveBeenCalled()
+
+		submit.resolve(true)
+		await enhancePromise
+
+		// The newer data differs from what was actually submitted — it must go out
+		expect(requestSubmit).toHaveBeenCalledOnce()
+	})
+
+	it('a form reset cancels a pending auto-submit', async () => {
+		const { element, requestSubmit } = setup()
+
+		type(element, 'about to be reset')
+		element.dispatchEvent(new Event('reset'))
+
+		await vi.advanceTimersByTimeAsync(600)
+		expect(requestSubmit).not.toHaveBeenCalled()
+	})
+
+	it('a queued auto-submit still fires when onSubmit throws', async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {})
+		const { form, element, requestSubmit } = setup()
+		const gate = deferred<void>()
+
+		const enhancePromise = form.enhance(makeInstance({ element, submit: async () => true }), {
+			onSubmit: async () => {
+				await gate.promise
+				throw new Error('pre-submit check failed')
+			}
+		})
+
+		type(element, 'typed while onSubmit runs')
+		await vi.advanceTimersByTimeAsync(600) // state is 'pending' → queued
+		expect(requestSubmit).not.toHaveBeenCalled()
+
+		gate.resolve()
+		await enhancePromise
+
+		expect(form.state).toBe('error')
 		expect(requestSubmit).toHaveBeenCalledOnce()
 	})
 

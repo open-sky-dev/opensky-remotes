@@ -36,6 +36,10 @@
 - Added a `default` condition to the package `exports` so non-Svelte-aware tooling (vitest, plain Node) can resolve the package.
 - Raised the `svelte` peer dependency to `^5.29.0` — the package imports `svelte/attachments`, which was introduced in that release.
 - Calling `updates()` with no arguments in `onSubmit` is now correctly forwarded to kit's `submit().updates()`, which suppresses the default `invalidateAll`. Previously, a zero-argument call was indistinguishable from not calling `updates()` at all.
+- A debounced draft write pending when the draft is discarded (e.g. by a successful submission) no longer fires afterwards and resurrects the stale draft.
+- Resetting the form now cancels a pending auto-submit debounce and any queued auto-submit — previously the debounce could fire after the reset and submit the freshly-emptied form.
+- A queued auto-submit is no longer dropped when an `onSubmit` callback throws, and `resetState()` clears the queued flag instead of stranding it.
+- The auto-submit change detector now snapshots the form when the submit event fires (the moment kit captures its `FormData`) instead of when the enhance callback runs, so input arriving during an async preflight can no longer be recorded as submitted without actually being sent.
 
 ## [0.1.0] - 2026-07-04
 

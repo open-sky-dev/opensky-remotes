@@ -1,13 +1,24 @@
 <script lang="ts">
-	import { createEnhancedForm, createValidation } from '@opensky/remotes'
+	import { enhancedForm } from '@opensky/remotes'
+	import CodeViewer from '$lib/CodeViewer.svelte'
 
 	import { contactForm } from './form.remote'
 	import { contactSchema } from './schema'
 
-	const valid = createValidation(contactForm)
+	import pageSource from './+page.svelte?raw'
+	import remoteSource from './form.remote.ts?raw-source'
+	import schemaSource from './schema.ts?raw'
+
+	const form = enhancedForm(contactForm, {
+		delayMs: 300,
+		timeoutMs: 5000,
+		// Fields opt into draft persistence below by spreading `.persist` —
+		// reload mid-draft and the values come back
+		persist: { maxAgeMs: 24 * 60 * 60 * 1000 }
+	})
 
 	// Async client-side validator — runs on blur, exposes `pending` while it waits
-	valid.fields.email.addValidator(async ({ value, issue }) => {
+	form.fields.email.addValidator(async ({ value, issue }) => {
 		await new Promise((resolve) => setTimeout(resolve, 900))
 
 		if (value === 'test@test.com') {
@@ -16,37 +27,27 @@
 	})
 
 	// Sync client-side validator
-	valid.fields.message.addValidator(({ value, issue }) => {
+	form.fields.message.addValidator(({ value, issue }) => {
 		if (value?.includes('spam')) return issue('No spam please')
 	})
-
-	const enhanced = createEnhancedForm(contactForm, {
-		validation: valid,
-		delayMs: 300,
-		timeoutMs: 5000
-	})
-
-	function resetForm() {
-		enhanced.reset()
-		contactForm.element?.reset()
-	}
 </script>
 
 <svelte:head>
-	<title>Contact Form — @opensky/remotes</title>
+	<title>Contact form — @opensky/remotes</title>
 </svelte:head>
 
 <main>
-	<h1>Contact Form</h1>
+	<h1>Contact form</h1>
 	<p class="hint">
-		Try <code>test@test.com</code> (async validator), <code>taken@test.com</code> (server-only
-		issue), or the word <code>spam</code> in the message.
+		Inline validation with custom validators, plus tracked submission state. Try
+		<code>test@test.com</code> (async validator), <code>taken@test.com</code> (server-only issue),
+		or the word <code>spam</code> in the message.
 	</p>
 
 	<form
-		{...valid.formHandler}
-		{...contactForm.preflight(contactSchema).enhance((form) =>
-			enhanced.enhance(form, {
+		{...form.handlers}
+		{...contactForm.preflight(contactSchema).enhance((instance) =>
+			form.enhance(instance, {
 				onReturn: ({ result }) => console.log('success', result),
 				onIssues: () => console.log('validation issues'),
 				onError: ({ error }) => console.error(error)
@@ -57,15 +58,15 @@
 			Name
 			<input
 				{...contactForm.fields.name.as('text')}
-				{...valid.fields.name.handlers}
+				{...form.fields.name.validate}
+				{...form.fields.name.persist}
 				autocomplete="name"
 				placeholder="Ada Lovelace"
-				aria-invalid={valid.fields.name.issues ? 'true' : undefined}
-				class:invalid={valid.fields.name.issues}
+				class:invalid={form.fields.name.issues}
 			/>
 		</label>
-		{#if valid.fields.name.issues}
-			{#each valid.fields.name.issues as issue (issue)}
+		{#if form.fields.name.issues}
+			{#each form.fields.name.issues as issue (issue)}
 				<p class="error">{issue}</p>
 			{/each}
 		{/if}
@@ -74,19 +75,19 @@
 			Email
 			<input
 				{...contactForm.fields.email.as('email')}
-				{...valid.fields.email.handlers}
+				{...form.fields.email.validate}
+				{...form.fields.email.persist}
 				autocomplete="email"
 				placeholder="ada@example.com"
-				aria-invalid={valid.fields.email.issues ? 'true' : undefined}
-				class:invalid={valid.fields.email.issues}
+				class:invalid={form.fields.email.issues}
 			/>
 		</label>
-		{#if valid.fields.email.issues}
-			{#each valid.fields.email.issues as issue (issue)}
+		{#if form.fields.email.issues}
+			{#each form.fields.email.issues as issue (issue)}
 				<p class="error">{issue}</p>
 			{/each}
 		{/if}
-		{#if valid.fields.email.pending}
+		{#if form.fields.email.pending}
 			<p class="pending">Checking...</p>
 		{/if}
 
@@ -94,47 +95,57 @@
 			Message
 			<textarea
 				{...contactForm.fields.message.as('text')}
-				{...valid.fields.message.handlers}
+				{...form.fields.message.validate}
+				{...form.fields.message.persist}
 				rows="5"
 				placeholder="Write at least 10 characters"
-				aria-invalid={valid.fields.message.issues ? 'true' : undefined}
-				class:invalid={valid.fields.message.issues}
+				class:invalid={form.fields.message.issues}
 			></textarea>
 		</label>
-		{#if valid.fields.message.issues}
-			{#each valid.fields.message.issues as issue (issue)}
+		{#if form.fields.message.issues}
+			{#each form.fields.message.issues as issue (issue)}
 				<p class="error">{issue}</p>
 			{/each}
 		{/if}
 
 		<div class="actions">
-			<button type="submit" disabled={enhanced.pending || enhanced.delayed}>
-				{enhanced.delayed ? 'Submitting...' : 'Send message'}
+			<button type="submit" disabled={form.pending}>
+				{form.delayed ? 'Submitting...' : 'Send message'}
 			</button>
-			<button type="button" onclick={resetForm}>Reset</button>
+			<button type="button" onclick={() => form.reset()}>Reset</button>
 		</div>
 	</form>
 
 	<aside>
-		<p>State: <code>{enhanced.state}</code></p>
-		{#if enhanced.timeout}
+		<p>State: <code>{form.state}</code></p>
+		{#if form.timeout}
 			<p>The request is taking longer than expected.</p>
 		{/if}
-		{#if enhanced.error}
+		{#if form.error}
 			<p class="error">The form hit an unexpected error. Check the console for details.</p>
 		{/if}
-		{#if enhanced.result}
+		{#if form.result}
 			<p class="success">Submitted!</p>
 		{/if}
 	</aside>
+
+	<CodeViewer
+		files={[
+			{ name: '+page.svelte', source: pageSource },
+			{ name: 'form.remote.ts', source: remoteSource },
+			{ name: 'schema.ts', source: schemaSource }
+		]}
+	/>
 </main>
 
 <style>
 	main {
-		max-width: 28rem;
-		margin: 3rem auto;
-		padding: 0 1rem;
-		font-family: system-ui, sans-serif;
+		padding-top: 2rem;
+	}
+
+	h1 {
+		margin: 0 0 0.5rem;
+		font-size: 1.5rem;
 	}
 
 	form {

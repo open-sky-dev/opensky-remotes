@@ -12,6 +12,7 @@
 	"scripts": {
 		"build": "bun run --cwd packages/remotes build",
 		"check": "bun run --cwd packages/remotes check",
+		"test": "bun run --cwd packages/remotes test",
 		"lint": "bun run --cwd packages/remotes lint",
 		"format": "bun run --cwd packages/remotes format",
 		"example": "bun run --cwd packages/remotes build && bun run --cwd examples/contact-form dev"

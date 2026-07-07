@@ -8,7 +8,6 @@ bun install --frozen-lockfile
 # Type-checks the package, including the compile-time type tests (*.test-d.ts)
 bun --bun run check
 
-# Runtime tests, once any exist
-if find packages/remotes/src -name '*.test.ts' -o -name '*.spec.ts' | grep -q .; then
-	cd packages/remotes && bun test
-fi
+# Runtime tests (vitest: the runes in .svelte.ts modules need the Svelte
+# compiler, and the persist/autoSubmit tests need a DOM — bun test has neither)
+bun run --cwd packages/remotes test

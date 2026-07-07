@@ -55,7 +55,7 @@
 		{...profileForm.preflight(profileSchema).enhance((instance) =>
 			form.enhance(instance, {
 				onReturn: ({ form: submitted }) => {
-					saved = submitted.fields.value()
+					saved = { ...saved, ...submitted.fields.value() }
 				}
 			})
 		)}

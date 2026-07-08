@@ -1,9 +1,30 @@
 <script lang="ts">
 	import { Spring } from 'svelte/motion'
+	import { page } from '$app/state'
 	import { packageManagers, type PackageManager } from '$lib/package-managers'
+	import AgentIcon from './AgentIcon.svelte'
 
-	let selected = $state<PackageManager>('bun')
-	const command = $derived(packageManagers.find((m) => m.id === selected)!.command)
+	type Tab = 'prompt' | PackageManager
+
+	// The copy-prompt button is the default; the package managers follow it.
+	const tabs: { id: Tab; label: string }[] = [
+		{ id: 'prompt', label: 'prompt' },
+		...packageManagers.map((m) => ({ id: m.id as Tab, label: m.label }))
+	]
+
+	let selected = $state<Tab>('prompt')
+	const isPrompt = $derived(selected === 'prompt')
+	const command = $derived(
+		isPrompt ? '' : packageManagers.find((m) => m.id === selected)!.command
+	)
+
+	// A ready-to-paste prompt that points an agent at the machine-readable docs.
+	const promptText = $derived(
+		`Set up @opensky/remotes in my SvelteKit project. It wraps SvelteKit's remote form ` +
+			`functions with submission state, inline validation UX, draft persistence, and auto-submit. ` +
+			`Read the docs for LLMs at ${page.url.origin}/llms.txt, then install the package, enable ` +
+			`async compilation and remoteFunctions in vite.config.ts, and wire up a form with enhancedForm.`
+	)
 
 	let copied = $state(false)
 	let resetTimer: ReturnType<typeof setTimeout>
@@ -15,9 +36,14 @@
 		resetTimer = setTimeout(() => (copied = false), 1400)
 	}
 
-	function pick(manager: (typeof packageManagers)[number]) {
-		selected = manager.id
-		copy(manager.command)
+	function copyCurrent() {
+		copy(isPrompt ? promptText : command)
+	}
+
+	// Selecting a tab only changes what the pill will copy — copying happens on the
+	// pill button itself.
+	function pick(tab: Tab) {
+		selected = tab
 	}
 
 	// Fluidly resize the button to its content: measure the natural width of the
@@ -46,10 +72,19 @@
 		class="press press-dark install-pill"
 		class:measured={initialized}
 		style:width={initialized ? `${width.current}px` : 'fit-content'}
-		onclick={() => copy(command)}
+		onclick={copyCurrent}
 	>
 		<span class="pill-inner" bind:offsetWidth={innerWidth}>
-			<span class="command">{command}</span>
+			{#if isPrompt}
+				<span class="agents" aria-hidden="true">
+					<AgentIcon id="claude" />
+					<AgentIcon id="codex" />
+					<AgentIcon id="cursor" />
+				</span>
+				<span class="command">Copy prompt</span>
+			{:else}
+				<span class="command">{command}</span>
+			{/if}
 			{#if copied}
 				<svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
 					<path
@@ -74,16 +109,17 @@
 		</span>
 	</button>
 
-	<div class="pm-tabs" role="group" aria-label="Package manager">
-		{#each packageManagers as manager (manager.id)}
+	<div class="pm-tabs" role="group" aria-label="Install or copy an agent prompt">
+		{#each tabs as tab (tab.id)}
 			<button
 				type="button"
 				class="pm-tab"
-				class:active={selected === manager.id}
-				aria-pressed={selected === manager.id}
-				onclick={() => pick(manager)}
+				class:tab-prompt={tab.id === 'prompt'}
+				class:active={selected === tab.id}
+				aria-pressed={selected === tab.id}
+				onclick={() => pick(tab.id)}
 			>
-				{manager.label}
+				{tab.label}
 			</button>
 		{/each}
 	</div>
@@ -129,7 +165,28 @@
 		font-weight: 500;
 	}
 
-	.install-pill svg {
+	/* The prompt label reads as UI text, not a shell command */
+	.install-pill .agents + .command {
+		font-family: var(--font-sans);
+		font-weight: 550;
+		font-variation-settings: 'wght' 550;
+	}
+
+	/* Agent marks sit directly on the dark pill (Codex/Cursor use light variants) */
+	.agents {
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
+		margin-right: 1px;
+	}
+
+	.agents :global(svg) {
+		display: block;
+	}
+
+	/* Dim only the trailing copy/check glyph — a direct child of the row — so the
+	 * agent marks on their chip keep full color */
+	.pill-inner > svg {
 		opacity: 0.7;
 	}
 
@@ -151,6 +208,12 @@
 		cursor: pointer;
 		transition: color 150ms ease;
 		-webkit-tap-highlight-color: transparent;
+	}
+
+	.pm-tab.tab-prompt {
+		font-family: var(--font-sans);
+		font-weight: 550;
+		font-variation-settings: 'wght' 550;
 	}
 
 	.pm-tab:hover {

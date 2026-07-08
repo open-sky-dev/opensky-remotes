@@ -1,5 +1,6 @@
 <script lang="ts">
 	import CodeBlock from '$lib/components/CodeBlock.svelte'
+	import InstallBlock from '$lib/components/InstallBlock.svelte'
 	import InstallPill from '$lib/components/InstallPill.svelte'
 	import SkyHero from '$lib/components/SkyHero.svelte'
 
@@ -56,7 +57,9 @@
 	<section id="installation">
 		<h2><a href="#installation">Installation</a></h2>
 		<div class="block">
-			<CodeBlock title="terminal" html={s.install.html} code={s.install.code} />
+			<InstallBlock
+				snippets={{ npm: s.install_npm, bun: s.install_bun, pnpm: s.install_pnpm }}
+			/>
 		</div>
 		<p>
 			Remote functions are experimental, so they need to be enabled in your project config —

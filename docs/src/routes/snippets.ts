@@ -1,12 +1,15 @@
 import type { CodeLang } from '$lib/server/highlight'
+import { packageManagers } from '$lib/package-managers'
 
 type Snippet = { lang: CodeLang; code: string }
 
+// One highlighted snippet per package manager (keys: install_npm, install_bun, …)
+const installSnippets = Object.fromEntries(
+	packageManagers.map((m) => [`install_${m.id}`, { lang: 'bash', code: m.command } as Snippet])
+)
+
 export const snippets: Record<string, Snippet> = {
-	install: {
-		lang: 'bash',
-		code: `npm i @opensky/remotes`
-	},
+	...installSnippets,
 
 	viteConfig: {
 		lang: 'typescript',

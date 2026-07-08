@@ -1,4 +1,6 @@
+import adapter from '@sveltejs/adapter-auto'
 import { sveltekit } from '@sveltejs/kit/vite'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 import { defineConfig, type Plugin } from 'vite'
 import { readFileSync } from 'node:fs'
 
@@ -39,7 +41,23 @@ function rawRemoteSource(): Plugin {
 }
 
 export default defineConfig({
-	plugins: [rawRemoteSource(), sveltekit()],
+	plugins: [
+		rawRemoteSource(),
+		// SvelteKit 2.62+ takes the full svelte config here; svelte.config.js is
+		// ignored once the plugin carries it (kit options sit at the top level)
+		sveltekit({
+			preprocess: vitePreprocess(),
+			compilerOptions: {
+				experimental: {
+					async: true
+				}
+			},
+			adapter: adapter(),
+			experimental: {
+				remoteFunctions: true
+			}
+		})
+	],
 	// @opensky/remotes is linked from ../../packages/remotes — don't serve a prebundled copy
 	optimizeDeps: {
 		exclude: ['@opensky/remotes']

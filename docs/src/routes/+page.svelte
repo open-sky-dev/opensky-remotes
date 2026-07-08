@@ -1,5 +1,6 @@
 <script lang="ts">
 	import CodeBlock from '$lib/components/CodeBlock.svelte'
+	import Disclosure from '$lib/components/Disclosure.svelte'
 	import InstallBlock from '$lib/components/InstallBlock.svelte'
 	import InstallPill from '$lib/components/InstallPill.svelte'
 	import SkyHero from '$lib/components/SkyHero.svelte'
@@ -20,7 +21,7 @@
 	<SkyHero />
 
 	<section id="overview" style="margin-top: 0">
-		<h1>@opensky/remotes</h1>
+		<h1>Overview <span class="h1-pkg">@opensky/remotes</span></h1>
 		<p>
 			<code>enhancedForm</code> wraps a
 			<a href="https://svelte.dev/docs/kit/remote-functions#form">remote form function</a> and takes
@@ -48,10 +49,7 @@
 				save-button-less forms
 			</li>
 		</ul>
-		<p>
-			Requires <code>@sveltejs/kit</code> 2.68.0 or newer (targets the current remote form
-			<code>enhance</code> instance API) and <code>svelte</code> 5.29 or newer (uses attachments).
-		</p>
+		<p class="note">Zero runtime dependencies. SvelteKit 2.68.0+ and Svelte 5.29+ required.</p>
 	</section>
 
 	<section id="installation">
@@ -61,12 +59,17 @@
 				snippets={{ npm: s.install_npm, bun: s.install_bun, pnpm: s.install_pnpm }}
 			/>
 		</div>
-		<p>
-			Remote functions are experimental, so they need to be enabled in your project config —
-			alongside async compilation:
-		</p>
 		<div class="block">
-			<CodeBlock title="vite.config.ts" html={s.viteConfig.html} code={s.viteConfig.code} />
+			<Disclosure title="Setting up SvelteKit remotes">
+				<p>
+					Remote functions are still experimental, so they need to be turned on in your project
+					config. You can learn more about remote functions on
+					<a href="https://svelte.dev/docs/kit/remote-functions">the official docs</a>.
+				</p>
+				<div class="block">
+					<CodeBlock title="vite.config.ts" html={s.viteConfig.html} code={s.viteConfig.code} />
+				</div>
+			</Disclosure>
 		</div>
 	</section>
 

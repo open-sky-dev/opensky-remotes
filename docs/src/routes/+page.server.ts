@@ -3,8 +3,8 @@ import { snippets } from './snippets'
 
 export const load = async () => {
 	const highlighted = await Promise.all(
-		Object.entries(snippets).map(async ([key, { code, lang }]) => {
-			return [key, { code: code.trim(), html: await highlight(code, lang) }] as const
+		Object.entries(snippets).map(async ([key, { code, lang, added }]) => {
+			return [key, { code: code.trim(), html: await highlight(code, lang, added) }] as const
 		})
 	)
 

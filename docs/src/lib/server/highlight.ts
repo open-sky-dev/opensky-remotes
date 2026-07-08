@@ -1,6 +1,18 @@
-import { createHighlighter, type Highlighter } from 'shiki'
+import { createHighlighter, type Highlighter, type ShikiTransformer } from 'shiki'
 
 export type CodeLang = 'typescript' | 'svelte' | 'bash' | 'json'
+
+// Tags 1-based line numbers with an `added` class so the CSS can highlight them
+// green — the source stays clean, so copied code carries no diff markers.
+function addedLines(lines: number[]): ShikiTransformer {
+	const set = new Set(lines)
+	return {
+		name: 'added-lines',
+		line(node, line) {
+			if (set.has(line)) this.addClassToHast(node, 'added')
+		}
+	}
+}
 
 // GitHub's light syntax palette; the code-card CSS overrides the pre
 // background, so only the token colors come from the theme
@@ -16,9 +28,13 @@ function getHighlighter() {
 	return highlighterPromise
 }
 
-export async function highlight(code: string, lang: CodeLang) {
+export async function highlight(code: string, lang: CodeLang, added?: number[]) {
 	const highlighter = await getHighlighter()
-	return highlighter.codeToHtml(code.trim(), { lang, theme: THEME })
+	return highlighter.codeToHtml(code.trim(), {
+		lang,
+		theme: THEME,
+		transformers: added?.length ? [addedLines(added)] : []
+	})
 }
 
 export type HighlightedFile = {

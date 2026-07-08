@@ -1,7 +1,7 @@
 import type { CodeLang } from '$lib/server/highlight'
 import { packageManagers } from '$lib/package-managers'
 
-type Snippet = { lang: CodeLang; code: string }
+type Snippet = { lang: CodeLang; code: string; added?: number[] }
 
 // One highlighted snippet per package manager (keys: install_npm, install_bun, …)
 const installSnippets = Object.fromEntries(
@@ -13,6 +13,8 @@ export const snippets: Record<string, Snippet> = {
 
 	viteConfig: {
 		lang: 'typescript',
+		// The two lines that actually enable remotes + async compilation
+		added: [9, 10],
 		code: `// vite.config.ts — remote functions and async compilation are experimental,
 // and since SvelteKit 2.62 the config can live on the plugin itself
 import { sveltekit } from '@sveltejs/kit/vite'

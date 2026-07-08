@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state'
-	import { docSections, examples, libVersion } from '$lib/nav'
+	import { docSections, examples, resources, libVersion } from '$lib/nav'
 	import { navState } from '$lib/nav-state.svelte'
 
 	let { spy = true }: { spy?: boolean } = $props()
@@ -23,6 +23,11 @@
 					current = id
 				}
 			}
+			// The last section is often too short to ever reach the reading line, so
+			// once the page is scrolled to the bottom, activate it directly.
+			const atBottom =
+				window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2
+			if (atBottom) current = docSections[docSections.length - 1].id
 			navState.active = current
 		}
 
@@ -47,6 +52,13 @@
 	<div class="side-group">
 		<span class="side-label">Examples</span>
 		{#each examples as { href, title } (href)}
+			<a {href} class:active={page.url.pathname === href}>{title}</a>
+		{/each}
+	</div>
+
+	<div class="side-group">
+		<span class="side-label">Resources</span>
+		{#each resources as { href, title } (href)}
 			<a {href} class:active={page.url.pathname === href}>{title}</a>
 		{/each}
 	</div>

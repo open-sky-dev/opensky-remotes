@@ -19,3 +19,8 @@ export const examples = [
 	{ href: '/examples/profile', title: 'Auto-save profile' },
 	{ href: '/examples/application', title: 'Draft persistence' }
 ]
+
+export const resources = [
+	{ href: '/changelog', title: 'Changelog' },
+	{ href: '/llms', title: 'llms.txt' }
+]

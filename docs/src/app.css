@@ -223,6 +223,16 @@ li {
 	scroll-margin-top: 110px;
 }
 
+/* Deemphasized package name trailing the Overview heading */
+.doc h1 .h1-pkg {
+	margin-left: 4px;
+	font-family: var(--font-mono);
+	font-size: 14px;
+	font-weight: 500;
+	letter-spacing: -0.1px;
+	color: var(--color-muted);
+}
+
 .doc section {
 	margin-top: 96px;
 	scroll-margin-top: 110px;
@@ -324,6 +334,16 @@ li {
 	margin-top: 24px;
 }
 
+/* Muted single-line disclaimer/note */
+.doc .note {
+	margin-top: 20px;
+	font-size: 13px;
+	line-height: 18px;
+	font-weight: 400;
+	letter-spacing: -0.18px;
+	color: var(--color-muted);
+}
+
 /* ---------------------------------------------------------------------------
  * Tables — the glimm props table
  * ------------------------------------------------------------------------- */
@@ -382,6 +402,93 @@ li {
 }
 
 /* ---------------------------------------------------------------------------
+ * Rendered markdown — the changelog, converted from CHANGELOG.md. Inherits the
+ * .doc prose system; these rules add release-note structure (version rules,
+ * section labels, the migration table) on top of it.
+ * ------------------------------------------------------------------------- */
+
+.doc .markdown > :first-child {
+	margin-top: 0;
+}
+
+/* Each version heading opens a new block, separated by a hairline */
+.doc .markdown h2 {
+	margin-top: 52px;
+	padding-top: 24px;
+	border-top: 1px solid var(--color-line);
+	font-variant-numeric: tabular-nums;
+}
+
+.doc .markdown > h2:first-child {
+	margin-top: 4px;
+	padding-top: 0;
+	border-top: none;
+}
+
+/* Added / Changed / Fixed labels */
+.doc .markdown h3 {
+	margin: 26px 0 0;
+	font-size: 12px;
+	line-height: 18px;
+	font-weight: 550;
+	font-variation-settings: 'wght' 550;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+}
+
+.doc .markdown p {
+	margin-top: 12px;
+}
+
+.doc .markdown a {
+	color: var(--color-ink);
+	font-weight: 500;
+	text-decoration: underline;
+	text-decoration-color: rgb(36 37 41 / 0.25);
+	text-underline-offset: 2px;
+	transition: opacity 150ms ease;
+}
+
+.doc .markdown a:hover {
+	opacity: 0.7;
+}
+
+/* The 0.1.0 → 1.0.0 migration table */
+.doc .markdown table {
+	width: 100%;
+	margin-top: 16px;
+	border-collapse: collapse;
+	text-align: left;
+	display: block;
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+.doc .markdown th {
+	padding: 8px 10px;
+	border-bottom: 1px solid var(--color-line);
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: -0.08px;
+	color: var(--color-muted);
+	white-space: nowrap;
+}
+
+.doc .markdown td {
+	padding: 7px 10px;
+	vertical-align: top;
+	border-bottom: 1px solid var(--color-line);
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--color-body);
+}
+
+.doc .markdown td code {
+	white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
  * Code cards
  * ------------------------------------------------------------------------- */
 
@@ -429,6 +536,16 @@ li {
 	font-size: 13px;
 	line-height: 20px;
 	white-space: pre;
+}
+
+/* Lines flagged as added: a full-bleed green wash with a left accent bar */
+.code-card-body .line.added {
+	display: inline-block;
+	width: calc(100% + 28px);
+	margin: 0 -14px;
+	padding: 0 14px;
+	background: rgb(46 160 67 / 0.12);
+	box-shadow: inset 2px 0 0 rgb(46 160 67 / 0.7);
 }
 
 .icon-button {

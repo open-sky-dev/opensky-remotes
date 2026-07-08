@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { fade, fly } from 'svelte/transition'
 	import { page } from '$app/state'
-	import { docSections, examples } from '$lib/nav'
+	import { docSections, examples, resources } from '$lib/nav'
 	import { navState } from '$lib/nav-state.svelte'
 	import Sidebar from './Sidebar.svelte'
 
 	let open = $state(false)
 
 	const label = $derived.by(() => {
-		const example = examples.find(({ href }) => href === page.url.pathname)
-		if (example) return example.title
+		const entry = [...examples, ...resources].find(({ href }) => href === page.url.pathname)
+		if (entry) return entry.title
 		return docSections.find(({ id }) => id === navState.active)?.title ?? docSections[0].title
 	})
 

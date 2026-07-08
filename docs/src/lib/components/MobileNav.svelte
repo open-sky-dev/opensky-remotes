@@ -13,6 +13,19 @@
 		return docSections.find(({ id }) => id === navState.active)?.title ?? docSections[0].title
 	})
 
+	// Close the sheet once the viewport grows past the mobile breakpoint —
+	// otherwise the scroll lock below stays applied on desktop, where the sheet
+	// is hidden by CSS and can no longer be dismissed.
+	$effect(() => {
+		const desktop = window.matchMedia('(min-width: 961px)')
+		const close = () => {
+			if (desktop.matches) open = false
+		}
+		close()
+		desktop.addEventListener('change', close)
+		return () => desktop.removeEventListener('change', close)
+	})
+
 	// Lock scroll and close on Escape while the sheet is open
 	$effect(() => {
 		if (!open) return

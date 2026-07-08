@@ -4,7 +4,8 @@
 	"type": "module",
 	"workspaces": [
 		"packages/*",
-		"examples/*"
+		"examples/*",
+		"docs"
 	],
 	"devDependencies": {
 		"@socketsecurity/bun-security-scanner": "^1.1.2"
@@ -15,6 +16,7 @@
 		"test": "bun run --cwd packages/remotes test",
 		"lint": "bun run --cwd packages/remotes lint",
 		"format": "bun run --cwd packages/remotes format",
-		"example": "bun run --cwd packages/remotes build && bun run --cwd examples/contact-form dev"
+		"example": "bun run --cwd packages/remotes build && bun run --cwd examples/contact-form dev",
+		"docs": "bun run --cwd packages/remotes build && bun run --cwd docs dev"
 	}
 }

@@ -1,0 +1,677 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource/geist-mono/400.css';
+@import '@fontsource/geist-mono/500.css';
+
+@theme {
+	--font-sans: 'Inter Variable', 'Inter', system-ui, -apple-system, sans-serif;
+	--font-mono: 'Geist Mono', 'SF Mono', 'Fira Code', 'Consolas', monospace;
+
+	/* Type colors */
+	--color-ink: #242529; /* headings, emphasized text */
+	--color-body: #525252; /* body copy */
+	--color-muted: #9ca3af; /* captions, inactive nav */
+	--color-faint: #bfbfbf; /* icon buttons at rest */
+
+	/* Surfaces + hairlines */
+	--color-line: #ececec;
+	--color-card: #f7f7f7;
+	--color-well: #f5f5f5;
+	--color-code-bg: #f0f0f0;
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
+body {
+	margin: 0;
+	background: #fff;
+	color: var(--color-body);
+	font-family: var(--font-sans);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	overflow-x: hidden;
+}
+
+p,
+li {
+	text-wrap: pretty;
+}
+
+/* ---------------------------------------------------------------------------
+ * Page shell — fixed wordmark, sticky sidebar column, content column
+ * ------------------------------------------------------------------------- */
+
+.wordmark {
+	position: fixed;
+	top: 20px;
+	left: 32px;
+	z-index: 70; /* above the mobile nav sheet */
+	font-family: var(--font-mono);
+	font-size: 13px;
+	line-height: 18px;
+	font-weight: 500;
+	letter-spacing: -0.1px;
+	color: var(--color-ink);
+	text-decoration: none;
+}
+
+/* Fixed fade at the top of the viewport — content scrolls off under it while
+ * the wordmark (z-50) and sidebar (z-45) stay above */
+.top-fade {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 124px;
+	z-index: 40;
+	pointer-events: none;
+	background: linear-gradient(to bottom, #fff 0%, #fff 30%, rgb(255 255 255 / 0) 100%);
+}
+
+.shell {
+	display: grid;
+	grid-template-columns: 22% 78%;
+	gap: 32px;
+	align-items: start;
+	padding-left: 32px;
+	padding-right: 32px;
+}
+
+.shell > aside {
+	position: sticky;
+	top: 106px;
+	margin-top: -46px;
+	align-self: start;
+	z-index: 45;
+}
+
+.shell > main {
+	min-height: 100vh;
+	padding: 152px 48px 96px;
+	min-width: 0;
+}
+
+.content {
+	max-width: 680px;
+	margin: 0 auto;
+}
+
+@media (max-width: 960px) {
+	.shell {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.shell > aside {
+		display: none;
+	}
+}
+
+@media (max-width: 640px) {
+	.shell {
+		padding-left: 16px;
+		padding-right: 16px;
+	}
+
+	.shell > main {
+		padding: 96px 8px 64px;
+	}
+}
+
+/* ---------------------------------------------------------------------------
+ * Sidebar nav
+ * ------------------------------------------------------------------------- */
+
+.side-nav {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.side-nav a {
+	font-size: 13px;
+	line-height: 18px;
+	font-weight: 550;
+	font-variation-settings: 'wght' 550;
+	letter-spacing: -0.18px;
+	color: var(--color-muted);
+	text-decoration: none;
+	transition: color 150ms ease;
+}
+
+.side-nav a:hover,
+.side-nav a.active {
+	color: var(--color-ink);
+}
+
+.side-nav .side-group {
+	margin-top: 24px;
+	padding-top: 16px;
+	border-top: 1px solid var(--color-line);
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+	width: max-content;
+	min-width: 128px;
+}
+
+.side-nav .side-label {
+	font-size: 11px;
+	line-height: 16px;
+	font-weight: 500;
+	letter-spacing: -0.08px;
+	color: var(--color-faint);
+	text-transform: uppercase;
+}
+
+.side-nav .side-meta {
+	gap: 6px;
+	font-size: 12px;
+	line-height: 17px;
+	font-weight: 450;
+	font-variation-settings: 'wght' 450;
+	letter-spacing: -0.01em;
+	color: var(--color-muted);
+}
+
+.side-nav a.side-author {
+	font: inherit;
+	color: var(--color-ink);
+	font-weight: 500;
+	font-variation-settings: 'wght' 500;
+	text-decoration: underline;
+	text-decoration-color: rgb(36 37 41 / 0.3);
+	text-underline-offset: 2px;
+	transition: opacity 150ms ease;
+}
+
+.side-nav a.side-author:hover {
+	opacity: 0.7;
+}
+
+.side-icons {
+	display: flex;
+	gap: 12px;
+	margin-top: 12px;
+}
+
+.side-icons a {
+	display: inline-flex;
+	color: var(--color-faint);
+	transition: color 150ms ease;
+}
+
+.side-icons a:hover {
+	color: var(--color-ink);
+}
+
+/* ---------------------------------------------------------------------------
+ * Prose — glimm's text system, applied to a `.doc` container
+ * ------------------------------------------------------------------------- */
+
+.doc h1 {
+	margin: 0 0 5px;
+	font-size: 17px;
+	line-height: 24px;
+	letter-spacing: -0.26px;
+	font-weight: 500;
+	color: var(--color-ink);
+	text-wrap: pretty;
+	scroll-margin-top: 110px;
+}
+
+.doc section {
+	margin-top: 96px;
+	scroll-margin-top: 110px;
+}
+
+.doc h2 {
+	margin: 0;
+	font-size: 15px;
+	line-height: 23px;
+	letter-spacing: -0.1px;
+	font-weight: 500;
+	color: var(--color-ink);
+	text-wrap: pretty;
+	scroll-margin-top: 110px;
+}
+
+.doc h2 a {
+	color: inherit;
+	text-decoration: none;
+}
+
+.doc p {
+	margin: 5px 0 0;
+	font-size: 15px;
+	line-height: 23px;
+	letter-spacing: -0.1px;
+	font-weight: 400;
+	color: var(--color-body);
+}
+
+.doc p strong,
+.doc li strong {
+	font-weight: 550;
+	font-variation-settings: 'wght' 550;
+	color: var(--color-ink);
+}
+
+.doc p a {
+	color: var(--color-ink);
+	font-weight: 500;
+	text-decoration: none;
+	transition: opacity 150ms ease;
+}
+
+.doc p a:hover {
+	opacity: 0.7;
+}
+
+.doc .lead {
+	margin: 0 0 10px;
+	font-size: 14px;
+	line-height: 23px;
+	letter-spacing: -0.1px;
+	font-weight: 550;
+	font-variation-settings: 'wght' 550;
+	color: var(--color-ink);
+}
+
+.doc ul {
+	margin: 12px 0 0;
+	padding: 0;
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+}
+
+.doc li {
+	position: relative;
+	padding-left: 22px;
+	font-size: 14px;
+	line-height: 23px;
+	letter-spacing: -0.1px;
+	font-weight: 400;
+	color: var(--color-body);
+}
+
+.doc li::before {
+	content: '•';
+	position: absolute;
+	left: 6px;
+	top: 0;
+	line-height: 23px;
+	color: var(--color-body);
+}
+
+.doc :not(pre) > code {
+	font-family: var(--font-mono);
+	font-size: 13px;
+	line-height: 20px;
+	background: var(--color-code-bg);
+	padding: 1px 5px;
+	border-radius: 3px;
+	color: var(--color-ink);
+}
+
+/* Blocks that follow a section heading */
+.doc .block {
+	margin-top: 24px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Tables — the glimm props table
+ * ------------------------------------------------------------------------- */
+
+.doc-table-scroll {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+.doc-table {
+	width: 100%;
+	min-width: 520px;
+	text-align: left;
+	border-collapse: collapse;
+	table-layout: fixed;
+}
+
+.doc-table th {
+	padding: 9px 10px;
+	border-bottom: 1px solid var(--color-line);
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: -0.08px;
+	color: var(--color-muted);
+}
+
+.doc-table tr {
+	border-bottom: 1px solid var(--color-line);
+}
+
+.doc-table td {
+	padding: 7px 10px;
+	vertical-align: top;
+	word-break: break-word;
+}
+
+.doc-table .cell-name {
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--color-ink);
+	font-variant-numeric: tabular-nums;
+	font-family: var(--font-mono);
+}
+
+.doc-table .cell-type {
+	font-size: 11px;
+	color: #858585;
+	font-variant-numeric: tabular-nums;
+	font-family: var(--font-mono);
+}
+
+.doc-table .cell-desc {
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--color-body);
+}
+
+/* ---------------------------------------------------------------------------
+ * Code cards
+ * ------------------------------------------------------------------------- */
+
+.code-card {
+	margin: 0;
+	border-radius: 12px;
+	overflow: hidden;
+	background: var(--color-card);
+	box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.04);
+}
+
+.code-card.on-well {
+	background: #fff;
+	box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.06);
+}
+
+.code-card-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 7px 12px;
+	border-bottom: 1px solid var(--color-line);
+}
+
+.code-card-header span {
+	font-size: 11px;
+	line-height: 16px;
+	font-weight: 500;
+	letter-spacing: -0.18px;
+	color: var(--color-muted);
+}
+
+.code-card-body {
+	overflow-x: auto;
+	padding: 10px 14px;
+}
+
+.code-card-body pre {
+	margin: 0;
+	background: transparent !important;
+}
+
+.code-card-body code {
+	font-family: var(--font-mono);
+	font-size: 13px;
+	line-height: 20px;
+	white-space: pre;
+}
+
+.icon-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	padding: 3px;
+	border: none;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--color-faint);
+	cursor: pointer;
+	transition: color 150ms ease;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.icon-button:hover {
+	color: var(--color-ink);
+}
+
+/* ---------------------------------------------------------------------------
+ * Pill buttons — glimm's press button
+ * ------------------------------------------------------------------------- */
+
+.press {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 28px;
+	padding: 0 12px;
+	border: none;
+	border-radius: 999px;
+	font-family: var(--font-sans);
+	font-size: 12px;
+	line-height: 18px;
+	font-weight: 550;
+	font-variation-settings: 'wght' 550;
+	letter-spacing: -0.1px;
+	cursor: pointer;
+	flex-shrink: 0;
+	transform-origin: 50% 50%;
+	transition:
+		background-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+		color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+		transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.press:active {
+	transition-duration: 60ms;
+	transform: scale(0.96);
+}
+
+.press-dark {
+	background: var(--color-ink);
+	color: #fff;
+	box-shadow:
+		0 0 0 0.75px #27272a inset,
+		0 0 0 1.25px rgb(255 255 255 / 0.3) inset,
+		0 8px 16px 0 rgb(0 0 0 / 0.08),
+		0 16px 32px 0 rgb(0 0 0 / 0.08);
+}
+
+.press-dark:hover {
+	background: #3a3b40;
+}
+
+.press-ghost {
+	background: transparent;
+	color: var(--color-body);
+	box-shadow: inset 0 0 0 1px var(--color-line);
+}
+
+.press-ghost:hover {
+	color: var(--color-ink);
+	box-shadow: inset 0 0 0 1px #dcdcdc;
+}
+
+.press:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
+ * Demo forms — shared styling for the example pages, so the demo sources
+ * stay readable (semantic class names only)
+ * ------------------------------------------------------------------------- */
+
+.demo {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	width: 100%;
+}
+
+.demo label {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	font-size: 13px;
+	line-height: 18px;
+	font-weight: 500;
+	letter-spacing: -0.1px;
+	color: var(--color-ink);
+}
+
+.demo input,
+.demo textarea,
+.demo select {
+	font-family: var(--font-sans);
+	font-size: 14px;
+	line-height: 20px;
+	font-weight: 400;
+	color: var(--color-ink);
+	padding: 8px 10px;
+	border: 1px solid #e4e4e7;
+	border-radius: 8px;
+	background: #fff;
+	transition:
+		border-color 150ms ease,
+		box-shadow 150ms ease;
+}
+
+.demo input:focus,
+.demo textarea:focus,
+.demo select:focus {
+	outline: none;
+	border-color: #a3a3a3;
+	box-shadow: 0 0 0 3px rgb(36 37 41 / 0.06);
+}
+
+.demo input::placeholder,
+.demo textarea::placeholder {
+	color: var(--color-faint);
+}
+
+.demo .invalid {
+	border-color: #dc2626;
+}
+
+.demo fieldset {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 16px;
+	margin: 0;
+	padding: 12px;
+	border: 1px solid #e4e4e7;
+	border-radius: 8px;
+}
+
+.demo legend {
+	padding: 0 4px;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--color-ink);
+}
+
+.demo .checkbox {
+	flex-direction: row;
+	align-items: center;
+	gap: 6px;
+	font-weight: 400;
+	color: var(--color-body);
+}
+
+.demo .checkbox input {
+	padding: 0;
+	accent-color: var(--color-ink);
+}
+
+.demo .hint,
+.demo .error,
+.demo .pending,
+.demo .success,
+.demo .status {
+	margin: 0;
+	font-size: 13px;
+	line-height: 18px;
+	letter-spacing: -0.1px;
+}
+
+.demo .hint {
+	color: var(--color-muted);
+}
+
+.demo .error {
+	color: #dc2626;
+}
+
+.demo .pending {
+	color: var(--color-muted);
+}
+
+.demo .success {
+	color: #059669;
+}
+
+.demo .saving {
+	color: #b45309;
+}
+
+.demo .saved {
+	color: #059669;
+}
+
+.demo .idle {
+	color: var(--color-muted);
+}
+
+.demo .actions {
+	display: flex;
+	gap: 8px;
+	margin-top: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Motion — glimm's entrance animation
+ * ------------------------------------------------------------------------- */
+
+@keyframes fade-in-blur {
+	0% {
+		opacity: 0;
+		filter: blur(8px);
+	}
+
+	to {
+		opacity: 1;
+		filter: blur(0);
+	}
+}
+
+.rise-in {
+	animation: 0.42s cubic-bezier(0.23, 1, 0.32, 1) both fade-in-blur;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.rise-in {
+		animation: none;
+	}
+
+	.press,
+	.press:active {
+		transition: none;
+		transform: none;
+	}
+}

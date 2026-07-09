@@ -10,11 +10,10 @@
 </script>
 
 <svelte:head>
-	<title>@opensky/remotes — enhanced remote form functions for SvelteKit</title>
-	<meta
-		name="description"
-		content="enhancedForm wraps SvelteKit remote form functions with submission state, inline validation UX, draft persistence, and auto-submit."
-	/>
+	<!-- The homepage keeps a bare brand title; sub-pages are templated by SeoTags -->
+	<title>OpenSky Remotes</title>
+	<meta property="og:title" content="OpenSky Remotes" />
+	<meta name="twitter:title" content="OpenSky Remotes" />
 </svelte:head>
 
 <div class="doc rise-in">

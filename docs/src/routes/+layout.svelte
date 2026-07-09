@@ -1,10 +1,13 @@
 <script lang="ts">
 	import '../app.css'
+	import { SeoTags } from '@opensky/seo'
 	import Sidebar from '$lib/components/Sidebar.svelte'
 	import MobileNav from '$lib/components/MobileNav.svelte'
 
 	let { children } = $props()
 </script>
+
+<SeoTags />
 
 <div class="top-fade" aria-hidden="true"></div>
 

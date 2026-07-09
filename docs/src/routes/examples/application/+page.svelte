@@ -5,10 +5,6 @@
 	let { data } = $props()
 </script>
 
-<svelte:head>
-	<title>Draft persistence — @opensky/remotes</title>
-</svelte:head>
-
 <ExampleShell title="Draft persistence" files={data.files}>
 	{#snippet blurb()}
 		Fill in a few fields — including some checkboxes — then reload the page. The draft comes back,

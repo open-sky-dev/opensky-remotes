@@ -14,14 +14,6 @@
 	}
 </script>
 
-<svelte:head>
-	<title>llms.txt — @opensky/remotes</title>
-	<meta
-		name="description"
-		content="Machine-readable documentation for @opensky/remotes, served at /llms.txt for AI coding agents."
-	/>
-</svelte:head>
-
 <div class="doc rise-in">
 	<section style="margin-top: 0">
 		<h1>llms.txt</h1>

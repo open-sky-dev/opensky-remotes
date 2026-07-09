@@ -5,10 +5,6 @@
 	let { data } = $props()
 </script>
 
-<svelte:head>
-	<title>Contact form — @opensky/remotes</title>
-</svelte:head>
-
 <ExampleShell title="Contact form" files={data.files}>
 	{#snippet blurb()}
 		Inline validation with custom validators, plus tracked submission state. Try

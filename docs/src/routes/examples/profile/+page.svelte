@@ -5,10 +5,6 @@
 	let { data } = $props()
 </script>
 
-<svelte:head>
-	<title>Auto-save profile — @opensky/remotes</title>
-</svelte:head>
-
 <ExampleShell title="Auto-save profile" files={data.files}>
 	{#snippet blurb()}
 		There is no save button. Edit a field and pause — the form auto-submits once you stop typing

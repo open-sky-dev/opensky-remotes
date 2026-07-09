@@ -2,11 +2,6 @@
 	let { data } = $props()
 </script>
 
-<svelte:head>
-	<title>Changelog — @opensky/remotes</title>
-	<meta name="description" content="Release history for @opensky/remotes." />
-</svelte:head>
-
 <div class="doc rise-in">
 	<section style="margin-top: 0">
 		<h1>Changelog</h1>

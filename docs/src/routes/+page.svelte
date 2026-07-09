@@ -9,13 +9,6 @@
 	const s = $derived(data.snippets)
 </script>
 
-<svelte:head>
-	<!-- The homepage keeps a bare brand title; sub-pages are templated by SeoTags -->
-	<title>OpenSky Remotes</title>
-	<meta property="og:title" content="OpenSky Remotes" />
-	<meta name="twitter:title" content="OpenSky Remotes" />
-</svelte:head>
-
 <div class="doc rise-in">
 	<SkyHero />
 
